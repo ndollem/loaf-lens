@@ -4,11 +4,11 @@ Foto: `train-data/domain-check/conveyor_mixed_01.webp` (dari user). Isinya roti 
 
 `segment_all` mendeteksi **20 roti**. Dua roti yang terpotong di tepi atas dan bawah frame dibuang.
 
-## Label acuan (visual oleh Claude, BELUM dikonfirmasi user)
+## Label acuan (visual oleh Claude; #12 & #19 dikonfirmasi user = OK)
 Nomor roti mengikuti gambar anotasi, diurutkan dari atas ke bawah.
 
 - **Kempes jelas** (puncak cekung, berkerut): #1, #3, #6, #17, #20
-- **Borderline** (lekukan kecil di puncak), sementara dianggap OK: #12, #19
+- **Borderline** (lekukan kecil di puncak): #12, #19 — **dikonfirmasi user: masih bisa diterima (OK)**
 - **Bagus**: sisanya (13 roti)
 
 ## Hasil
@@ -34,5 +34,5 @@ Nomor roti mengikuti gambar anotasi, diurutkan dari atas ke bawah.
 ## Catatan
 - **A memisahkan roti kempes dengan jelas** pada foto ini. Skor kempes 66–95, skor roti OK ≤ 31. Roti borderline (#12 = 15, #19 = 27) mendapat skor di atas sebagian besar roti bagus (median 5), tapi masih di bawah threshold.
 - **B tidak bisa dipakai untuk keputusan di domain ini.** Semua skornya di atas threshold karena memory bank berisi roti studio, bukan roti konveyor. Urutan skornya masih ada sinyal (AUROC 0.86), tapi butuh refit memory bank dari roti bagus di kamera konveyor.
-- **Satu foto, 20 roti:** ini indikasi, bukan evaluasi akurasi. Label acuan dari pengamatan visual dan perlu dikonfirmasi user.
+- **Satu foto, 20 roti:** ini indikasi, bukan evaluasi akurasi. Label acuan dari pengamatan visual; status #12 & #19 sudah dikonfirmasi user (OK).
 - Gambar anotasi (tidak di-commit): `outputs/baseline/domain_check.jpg`, `outputs/anomaly/domain_check.jpg`. Untuk membuat ulang: `make domain-check CONFIG=configs/baseline.yaml DOMAIN_IMG=train-data/domain-check/conveyor_mixed_01.webp`.
