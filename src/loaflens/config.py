@@ -201,6 +201,7 @@ def validate(cfg: Config) -> None:
         _check_choice(p.get("classifier"), CLASSIFIERS, "model.params.classifier")
         if not isinstance(p.get("crop_size"), int) or p["crop_size"] < 32:
             raise ConfigError("model.params.crop_size harus int >= 32")
+        _validate_baseline(p)
     if cfg.model.type == "anomaly":
         _validate_anomaly(cfg.model.params)
 
@@ -218,6 +219,41 @@ def validate(cfg: Config) -> None:
 
     if not 0 < cfg.eval.fpr_target < 1 or cfg.eval.cv_folds < 2 or cfg.eval.top_errors < 0:
         raise ConfigError("eval.fpr_target harus di (0, 1), eval.cv_folds >= 2, top_errors >= 0")
+
+
+def _int_range(v: Any, lo: int, hi: int) -> bool:
+    """True bila v = [a, b] int dengan lo <= a <= b <= hi."""
+    return (
+        isinstance(v, list | tuple)
+        and len(v) == 2
+        and all(isinstance(x, int) for x in v)
+        and lo <= v[0] <= v[1] <= hi
+    )
+
+
+def _validate_baseline(p: dict[str, Any]) -> None:
+    """Validasi model.params scorer A: parameter piksel fitur & augmentasi resolusi."""
+    f = p.get("features") or {}
+    crop = p["crop_size"]
+    for key in ("erode_px", "crease_px"):
+        v = f.get(key, 1)
+        if not isinstance(v, int) or not 0 <= v or 2 * v + 1 > crop // 4:
+            raise ConfigError(
+                f"model.params.features.{key} harus int >= 0 dan 2*{key}+1 <= crop_size/4"
+            )
+    if float(f.get("texture_blur_sigma", 0)) < 0:
+        raise ConfigError("model.params.features.texture_blur_sigma harus >= 0")
+    aug = p.get("augment")
+    if aug is None:
+        return
+    if not isinstance(aug, dict) or set(aug) != {"copies", "bun_px", "jpeg_quality"}:
+        raise ConfigError("model.params.augment harus null atau {copies, bun_px, jpeg_quality}")
+    if not isinstance(aug["copies"], int) or aug["copies"] < 0:
+        raise ConfigError("model.params.augment.copies harus int >= 0")
+    if not _int_range(aug["bun_px"], 16, 4096):
+        raise ConfigError("model.params.augment.bun_px harus [min, max] int, 16 <= min <= max")
+    if not _int_range(aug["jpeg_quality"], 1, 100):
+        raise ConfigError("model.params.augment.jpeg_quality harus [min, max] int di 1–100")
 
 
 def _validate_anomaly(p: dict[str, Any]) -> None:

@@ -3,8 +3,8 @@
 > **Hasil pada 48 foto studio; indikasi kelayakan, bukan klaim akurasi produksi.**
 
 - Tanggal: 2026-11-08
-- Classifier: `logistic_regression` + StandardScaler; 25 fitur (tekstur, warna/kilap, bentuk bebas skala) dari crop roti 192 px. Dilatih dari normal + kempes.
-- Train: 34 gambar (split `train` manifest beku; label normal/defect). Threshold config: **50**; threshold terkalibrasi (CV train+val, FPR ≤ 0.05): **48.9** (reject jika skor ≥ threshold).
+- Classifier: `logistic_regression` + StandardScaler; 25 fitur (tekstur, warna/kilap, bentuk bebas skala) dari crop roti 64 px. Dilatih dari normal + kempes.
+- Train: 34 gambar (split `train` manifest beku; label normal/defect). Threshold config: **50**; threshold terkalibrasi (CV train+val, FPR ≤ 0.05): **40.4** (reject jika skor ≥ threshold).
 - **Test dievaluasi dengan dua threshold yang keduanya TIDAK dipilih dari test** (config & kalibrasi CV train+val). Fitur dan hyperparameter tidak disetel dari test.
 - Gagal segmentasi pada val+test (fallback seluruh gambar): 0
 
@@ -16,8 +16,8 @@ Recall @ FPR ≤ 0.05 dihitung dari kurva ROC (threshold optimal pasca-hoc, hany
 |---|---|---|---|---|---|---|---|---|
 | val | 50 | 6 (3/3) | 1.000 | 1.00 (0.00) | 1.00 | 1.00 | 1.00 | 3 0 0 3 |
 | test | 50 | 8 (4/4) | 1.000 | 1.00 (0.00) | 1.00 | 1.00 | 1.00 | 4 0 0 4 |
-| val | 48.9 | 6 (3/3) | 1.000 | 1.00 (0.00) | 1.00 | 1.00 | 1.00 | 3 0 0 3 |
-| test | 48.9 | 8 (4/4) | 1.000 | 1.00 (0.00) | 1.00 | 1.00 | 1.00 | 4 0 0 4 |
+| val | 40.4 | 6 (3/3) | 1.000 | 1.00 (0.00) | 1.00 | 1.00 | 1.00 | 3 0 0 3 |
+| test | 40.4 | 8 (4/4) | 1.000 | 1.00 (0.00) | 1.00 | 1.00 | 1.00 | 4 0 0 4 |
 
 ## Cross-validation per grup (5-fold StratifiedGroupKFold, train+val, test tidak ikut)
 
@@ -25,19 +25,19 @@ Lebih bisa dipercaya daripada hold-out kecil di atas. Grup = `batch_id` digabung
 
 | metrik | nilai |
 |---|---|
-| AUROC per fold (mean ± std) | 0.988 ± 0.025 |
-| akurasi @ threshold 50 (mean ± std) | 0.975 ± 0.050 |
-| AUROC gabungan out-of-fold (n=40) | 0.992 |
-| recall @ FPR ≤ 0.05 out-of-fold (FPR) | 1.00 (0.05) |
+| AUROC per fold (mean ± std) | 1.000 ± 0.000 |
+| akurasi @ threshold 50 (mean ± std) | 1.000 ± 0.000 |
+| AUROC gabungan out-of-fold (n=40) | 1.000 |
+| recall @ FPR ≤ 0.05 out-of-fold (FPR) | 1.00 (0.00) |
 
-AUROC per fold: 0.938, 1.000, 1.000, 1.000, 1.000
+AUROC per fold: 1.000, 1.000, 1.000, 1.000, 1.000
 
 ## Kalibrasi threshold (F9, target FPR ≤ 0.05, tanpa test)
 
 | sumber | n normal / kempes | langkah FPR | threshold | FPR | recall | FPR / recall @ config 50 |
 |---|---|---|---|---|---|---|
-| CV out-of-fold train+val (**saran**) | 20 / 20 | 0.050 | **48.9** | 0.05 | 1.00 | 0.05 / 1.00 |
-| val saja (pembanding) | 3 / 3 | 0.333 | 48.3 | 0.00 | 1.00 | 0.00 / 1.00 |
+| CV out-of-fold train+val (**saran**) | 20 / 20 | 0.050 | **40.4** | 0.05 | 1.00 | 0.00 / 1.00 |
+| val saja (pembanding) | 3 / 3 | 0.333 | 49.9 | 0.00 | 1.00 | 0.00 / 1.00 |
 
 Aturan: boleh k = floor(target · n normal) false positive → batas bawah = sedikit di atas skor normal tertinggi ke-(k+1); threshold lalu digeser ke tengah celah antara batas itu dan skor kempes terendah di atasnya (margin maksimum, FPR/recall data kalibrasi tidak berubah). **Kasar:** dengan 20 normal di CV satu roti = langkah FPR 0.05, jadi target 5% = paling banyak 1 normal di atas batas; di val (3 normal) target 5% = FPR 0. Saran ditulis ke `calibration.yaml`; config TIDAK diubah otomatis.
 
@@ -49,28 +49,28 @@ Aturan: boleh k = floor(target · n normal) false positive → batas bawah = sed
 
 | kelompok | n | skor rata-rata | min–max | salah |
 |---|---|---|---|---|
-| bagus | 2 | 2.8 | 2.1–3.4 | 0 |
-| medium-good | 1 | 2.2 | 2.2–2.2 | 0 |
-| medium-bad | 2 | 93.9 | 93.3–94.5 | 0 |
-| bad | 1 | 98.0 | 98.0–98.0 | 0 |
+| bagus | 2 | 1.0 | 0.5–1.4 | 0 |
+| medium-good | 1 | 0.7 | 0.7–0.7 | 0 |
+| medium-bad | 2 | 98.9 | 98.5–99.2 | 0 |
+| bad | 1 | 99.5 | 99.5–99.5 | 0 |
 
 **test**
 
 | kelompok | n | skor rata-rata | min–max | salah |
 |---|---|---|---|---|
-| bagus | 1 | 2.5 | 2.5–2.5 | 0 |
-| medium-good | 3 | 7.7 | 3.1–14.1 | 0 |
-| medium-bad | 1 | 75.9 | 75.9–75.9 | 0 |
-| bad | 3 | 97.5 | 93.2–99.8 | 0 |
+| bagus | 1 | 0.4 | 0.4–0.4 | 0 |
+| medium-good | 3 | 3.4 | 2.0–4.2 | 0 |
+| medium-bad | 1 | 69.4 | 69.4–69.4 | 0 |
+| bad | 3 | 99.6 | 98.9–100.0 | 0 |
 
 **CV out-of-fold (train+val)**
 
 | kelompok | n | skor rata-rata | min–max | salah |
 |---|---|---|---|---|
-| bagus | 11 | 11.6 | 0.1–84.1 | 1 |
-| medium-good | 9 | 7.1 | 0.5–26.3 | 0 |
-| medium-bad | 11 | 90.7 | 78.5–97.4 | 0 |
-| bad | 9 | 92.6 | 71.7–99.2 | 0 |
+| bagus | 11 | 5.5 | 0.0–42.8 | 0 |
+| medium-good | 9 | 3.5 | 0.0–13.8 | 0 |
+| medium-bad | 11 | 92.9 | 67.1–99.6 | 0 |
+| bad | 9 | 98.6 | 96.0–99.9 | 0 |
 
 ## Kesalahan terbesar (margin salah-sisi dari threshold config)
 
@@ -84,22 +84,22 @@ Aturan: boleh k = floor(target · n normal) false positive → batas bawah = sed
 
 **CV out-of-fold**
 
-- `train-data/good-loaf/bagus (10).png` — label normal, skor 84.1 (margin 34.1)
+(tidak ada kesalahan pada threshold 50)
 
 ## Latency & ukuran model
 
-Rata-rata 4.0 ms/gambar (median 3.9, maks 4.4; n=14, setelah pemanasan) untuk segmentasi + representasi + skor, CPU, tanpa waktu baca file. Target PRD: ≤ 100 ms. File model: 0.00 MB.
+Rata-rata 1.9 ms/gambar (median 1.9, maks 2.1; n=14, setelah pemanasan) untuk segmentasi + representasi + skor, CPU, tanpa waktu baca file. Target PRD: ≤ 100 ms. File model: 0.00 MB.
 
 ## Domain check: foto konveyor asli (semua roti OK)
 
-Foto: `train-data/domain-check/conveyor_good_01.webp` — roti terdeteksi: **15** (roti terpotong di tepi frame dibuang). Semua roti di foto ini OK menurut user, jadi **setiap REJECT = false positive** di domain konveyor. Tidak ada retraining/tuning dari foto ini. Gambar beranotasi ada di `outputs/baseline/` (tidak di-versi).
+Foto: `train-data/domain-check/conveyor_good_01.webp` — roti terdeteksi: **15** (roti terpotong di tepi frame dibuang). Label per roti tidak diketahui tool; bila semua roti di foto OK, **setiap REJECT = false positive** di domain konveyor. Tidak ada retraining/tuning dari foto ini. Gambar beranotasi ada di `outputs/baseline/` (tidak di-versi).
 
-| threshold | nilai | REJECT (false positive) |
+| threshold | nilai | REJECT |
 |---|---|---|
 | config | 50 | 0/15 |
-| kalibrasi | 48.9 | 0/15 |
+| kalibrasi | 40.4 | 0/15 |
 
-Skor: min 0.9, median 5.4, maks 31.7. Per roti (urut atas→bawah): #1=7, #2=11, #3=11, #4=32, #5=3, #6=5, #7=8, #8=7, #9=2, #10=5, #11=6, #12=2, #13=4, #14=2, #15=1
+Skor: min 0.5, median 2.6, maks 14.9. Per roti (urut atas→bawah): #1=1, #2=8, #3=2, #4=15, #5=1, #6=2, #7=6, #8=3, #9=12, #10=4, #11=8, #12=7, #13=1, #14=1, #15=1
 
 ## Cek shortcut: AUROC satu fitur
 
@@ -107,33 +107,33 @@ CV = rata-rata AUROC di fold uji (arah fitur dipilih dari fold latih); gabungan 
 
 | fitur | AUROC CV | AUROC gabungan | catatan |
 |---|---|---|---|
-| `col_L_std` | 0.912 | 0.925 |  |
-| `col_a_mean` | 0.875 | 0.845 |  |
-| `tex_lbp_3` | 0.863 | 0.867 |  |
-| `tex_lbp_0` | 0.838 | 0.815 |  |
-| `shape_aspect` | 0.838 | 0.835 |  |
-| `col_b_std` | 0.825 | 0.820 |  |
-| `col_L_mean` | 0.787 | 0.762 |  |
-| `tex_lbp_1` | 0.762 | 0.733 |  |
-| `tex_lbp_5` | 0.738 | 0.708 |  |
-| `shape_circularity` | 0.688 | 0.672 |  |
-| `tex_lbp_2` | 0.688 | 0.698 |  |
-| `tex_lbp_6` | 0.650 | 0.637 |  |
-| `tex_lbp_8` | 0.625 | 0.603 |  |
-| `shape_solidity` | 0.625 | 0.630 |  |
-| `tex_lbp_7` | 0.613 | 0.585 |  |
-| `tex_lbp_9` | 0.588 | 0.613 |  |
-| `col_specular_frac` | 0.575 | 0.575 |  |
-| `tex_edge_density` | 0.525 | 0.537 |  |
-| `col_a_std` | 0.525 | 0.562 |  |
-| `shape_extent` | 0.425 | 0.540 |  |
-| `tex_lbp_4` | 0.412 | 0.537 |  |
-| `tex_lap_var` | 0.412 | 0.527 |  |
-| `tex_crease` | 0.362 | 0.547 |  |
-| `tex_grad_mean` | 0.362 | 0.522 |  |
-| `col_b_mean` | 0.287 | 0.513 |  |
+| `col_L_std` | 0.912 | 0.920 |  |
+| `col_a_mean` | 0.875 | 0.848 |  |
+| `shape_aspect` | 0.850 | 0.843 |  |
+| `col_L_mean` | 0.787 | 0.772 |  |
+| `col_b_std` | 0.775 | 0.790 |  |
+| `tex_lbp_4` | 0.713 | 0.685 |  |
+| `shape_circularity` | 0.700 | 0.708 |  |
+| `tex_lbp_0` | 0.637 | 0.640 |  |
+| `tex_lbp_9` | 0.637 | 0.635 |  |
+| `shape_solidity` | 0.637 | 0.637 |  |
+| `tex_lbp_6` | 0.625 | 0.650 |  |
+| `tex_lbp_2` | 0.613 | 0.570 |  |
+| `tex_lbp_8` | 0.600 | 0.610 |  |
+| `tex_lap_var` | 0.600 | 0.605 |  |
+| `tex_lbp_1` | 0.575 | 0.552 |  |
+| `tex_crease` | 0.550 | 0.615 |  |
+| `col_a_std` | 0.550 | 0.583 |  |
+| `col_specular_frac` | 0.550 | 0.550 |  |
+| `tex_lbp_3` | 0.463 | 0.557 |  |
+| `tex_lbp_7` | 0.450 | 0.507 |  |
+| `tex_lbp_5` | 0.425 | 0.557 |  |
+| `shape_extent` | 0.400 | 0.535 |  |
+| `tex_edge_density` | 0.375 | 0.510 |  |
+| `tex_grad_mean` | 0.375 | 0.535 |  |
+| `col_b_mean` | 0.338 | 0.530 |  |
 
-Koefisien logistic regression terbesar (fitur terstandardisasi; + = ke arah kempes): `col_L_std` -1.25, `col_b_std` -0.76, `shape_aspect` -0.64, `col_a_mean` -0.59, `tex_lbp_3` -0.58, `col_L_mean` +0.57, `tex_crease` +0.47, `tex_lbp_0` -0.43
+Koefisien logistic regression terbesar (fitur terstandardisasi; + = ke arah kempes): `col_L_std` -2.03, `col_b_std` -1.55, `col_a_mean` -1.15, `col_L_mean` +0.88, `shape_aspect` -0.85, `shape_extent` +0.73, `tex_crease` +0.58, `shape_circularity` -0.46
 
 ## Catatan & keterbatasan
 

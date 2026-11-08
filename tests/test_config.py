@@ -50,6 +50,12 @@ def test_baseline_uses_normal_and_defect() -> None:
         (("model", "train_labels"), []),
         (("model", "params", "classifier"), "xgboost"),
         (("model", "params", "crop_size"), 10),
+        (("model", "params", "features", "erode_px"), 9),  # 2*9+1 > crop_size/4 pada crop 64
+        (("model", "params", "features", "crease_px"), -1),
+        (("model", "params", "augment", "copies"), -1),
+        (("model", "params", "augment", "bun_px"), [200, 50]),
+        (("model", "params", "augment", "jpeg_quality"), [40, 101]),
+        (("model", "params", "augment"), {"copies": 4}),
         (("segment", "blur"), 4),
         (("segment", "sat_threshold"), 300),
         (("eval", "cv_folds"), 1),
@@ -68,6 +74,11 @@ def test_invalid_values_raise(raw: dict, path: tuple[str, ...], value: object) -
     node[path[-1]] = value
     with pytest.raises(ConfigError):
         from_dict(bad)
+
+
+def test_augment_can_be_disabled(raw: dict) -> None:
+    raw["model"]["params"]["augment"] = None
+    assert from_dict(raw).model.params["augment"] is None
 
 
 def test_unknown_segment_key_raises(raw: dict) -> None:

@@ -6,7 +6,9 @@ train+val (test tidak ikut), domain check foto konveyor (``eval.domain_check``),
 fitur (baseline) dan overlay heatmap (anomaly). Output di ``output.dir``: report.md, metrics.json,
 scores.csv, calibration.yaml, roc_test.png, domain_check.jpg (+ salinan ``eval.docs_copy``).
 
-``--domain-check FOTO``: hanya domain check satu foto (tanpa evaluasi penuh).
+``--domain-check FOTO``: hanya domain check satu foto (tanpa evaluasi penuh). ``--domain-scale S``:
+foto diperkecil dulu ×S (INTER_AREA) untuk menguji ketahanan resolusi; bila ``labels.json`` di
+folder foto punya entri foto itu, jumlah kempes tertangkap / roti OK ter-reject ikut dilaporkan.
 """
 
 from __future__ import annotations
@@ -228,14 +230,23 @@ class DomainCheck:
 
 
 def domain_check(
-    scorer: Scorer, cfg: Config, path: str, thresholds: dict[str, float], root: Path, out: Path
+    scorer: Scorer,
+    cfg: Config,
+    path: str,
+    thresholds: dict[str, float],
+    root: Path,
+    out: Path,
+    scale: float = 1.0,
 ) -> DomainCheck:
     """Skor tiap roti terdeteksi di foto konveyor; tulis gambar beranotasi ke ``out``.
 
     Tool tidak tahu label tiap roti: bila semua roti di foto OK, setiap REJECT = false positive.
-    Tidak ada retraining/tuning dari foto ini.
+    Tidak ada retraining/tuning dari foto ini. ``scale`` < 1: foto diperkecil dulu (INTER_AREA);
+    bbox di hasil tetap dalam piksel foto yang sudah diperkecil.
     """
     img = load_image(path, root)
+    if scale != 1.0:
+        img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
     segs = segment_all(img, cfg.segment, cfg.camera.roi)
     scores = [scorer.score(img, sg) for sg in segs]
     res = DomainCheck(path, scores, [sg.bbox for sg in segs], thresholds)
@@ -784,7 +795,8 @@ def evaluate(cfg: Config, root: Path) -> str:
     write_calibration(cal, out_dir / "calibration.yaml")
     shortcuts = None
     if cfg.model.type == "baseline":
-        shortcuts = feature_shortcuts(np.stack(cv.reprs), cv.y, cv.groups, cfg)
+        x_clean = np.stack([np.atleast_2d(r)[0] for r in cv.reprs])  # tanpa salinan augmentasi
+        shortcuts = feature_shortcuts(x_clean, cv.y, cv.groups, cfg)
     if cfg.model.type == "anomaly" and cfg.eval.heatmaps:
         save_heatmaps(scorer, sets, root, out_dir / "heatmaps")
 
@@ -821,7 +833,23 @@ def evaluate(cfg: Config, root: Path) -> str:
     return report
 
 
-def run_domain_check(cfg: Config, root: Path, path: str) -> DomainCheck:
+def label_counts(dc: DomainCheck, defects: list[list[float]], scale: float) -> dict[str, int]:
+    """Banding dengan label acuan (titik tengah roti kempes, piksel foto asli).
+
+    Objek terdeteksi = kempes bila bbox-nya memuat salah satu titik kempes (blob gabungan dua roti
+    yang memuat roti kempes ikut dihitung kempes). Threshold = config.
+    """
+    out = {"kempes": 0, "kempes_reject": 0, "ok": 0, "ok_reject": 0}
+    t = dc.thresholds["config"]
+    for (x, y, w, h), s in zip(dc.bboxes, dc.scores, strict=True):
+        hit = any(x <= px * scale <= x + w and y <= py * scale <= y + h for px, py in defects)
+        key = "kempes" if hit else "ok"
+        out[key] += 1
+        out[f"{key}_reject"] += int(s >= t)
+    return out
+
+
+def run_domain_check(cfg: Config, root: Path, path: str, scale: float = 1.0) -> DomainCheck:
     """Domain check satu foto (CLI ``--domain-check``); threshold kalibrasi dari calibration.yaml
     bila sudah ada (hasil ``calibrate``/``evaluate``)."""
     import yaml
@@ -831,9 +859,30 @@ def run_domain_check(cfg: Config, root: Path, path: str) -> DomainCheck:
     cal_path = root / cfg.output_dir / "calibration.yaml"
     if cal_path.exists():
         thresholds["kalibrasi"] = float(yaml.safe_load(cal_path.read_text())["suggested_threshold"])
-    out = root / cfg.output_dir / "domain_check.jpg"
-    dc = domain_check(scorer, cfg, path, thresholds, root, out)
-    md = "\n".join(["# Domain check", "", *domain_table(dc, f"Gambar: `{out.name}`.")]) + "\n"
+    suffix = "" if scale == 1.0 else f"_x{scale:g}"
+    out = root / cfg.output_dir / f"domain_check{suffix}.jpg"
+    dc = domain_check(scorer, cfg, path, thresholds, root, out, scale)
+    lines = ["# Domain check", "", *domain_table(dc, f"Gambar: `{out.name}` (skala ×{scale:g}).")]
+    labels_path = root / Path(path).parent / "labels.json"
+    entry = (
+        json.loads(labels_path.read_text()).get(Path(path).name) if labels_path.exists() else None
+    )
+    if entry is not None:
+        c = label_counts(dc, entry["defect"], scale)
+        log.info(
+            "Label acuan (thr config): kempes tertangkap %d/%d, roti OK ter-reject %d/%d",
+            c["kempes_reject"],
+            c["kempes"],
+            c["ok_reject"],
+            c["ok"],
+        )
+        lines += [
+            "",
+            f"Banding `{labels_path.name}` (threshold config): kempes tertangkap "
+            f"**{c['kempes_reject']}/{c['kempes']}**, roti OK ter-reject "
+            f"**{c['ok_reject']}/{c['ok']}**.",
+        ]
+    md = "\n".join(lines) + "\n"
     (out.with_suffix(".md")).write_text(md, encoding="utf-8")
     return dc
 
@@ -843,11 +892,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluasi scorer pada val/test + CV train+val.")
     parser.add_argument("--config", required=True, help="path configs/*.yaml")
     parser.add_argument("--domain-check", metavar="FOTO", help="hanya domain check foto konveyor")
+    parser.add_argument(
+        "--domain-scale",
+        type=float,
+        default=1.0,
+        metavar="S",
+        help="perkecil foto domain check ×S dulu (uji ketahanan resolusi), mis. 0.383",
+    )
     args = parser.parse_args(argv)
+    if not 0 < args.domain_scale <= 1:
+        parser.error("--domain-scale harus di (0, 1]")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     cfg = load_config(args.config)
     if args.domain_check:
-        run_domain_check(cfg, Path.cwd(), args.domain_check)
+        run_domain_check(cfg, Path.cwd(), args.domain_check, args.domain_scale)
     else:
         evaluate(cfg, Path.cwd())
     return 0

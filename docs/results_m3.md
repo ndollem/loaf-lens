@@ -9,30 +9,35 @@
 |---|---|---|
 | AUROC val (3+3) | 1.000 | 1.000 |
 | AUROC test (4+4) | 1.000 | 1.000 |
-| AUROC CV per fold (mean ± std) | 0.988 ± 0.025 | 1.000 ± 0.000 |
-| AUROC CV gabungan out-of-fold (n=40) | 0.992 | 0.995 |
-| recall @ FPR ≤ target, CV out-of-fold (FPR) | 1.00 (0.05) | 0.95 (0.00) |
+| AUROC CV per fold (mean ± std) | 1.000 ± 0.000 | 1.000 ± 0.000 |
+| AUROC CV gabungan out-of-fold (n=40) | 1.000 | 0.995 |
+| recall @ FPR ≤ target, CV out-of-fold (FPR) | 1.00 (0.00) | 0.95 (0.00) |
 | recall @ FPR ≤ target, test (FPR) | 1.00 (0.00) | 1.00 (0.00) |
 | threshold config | 50 | 50 |
-| threshold terkalibrasi (CV, FPR ≤ target) | 48.9 | 52.1 |
-| akurasi val / test / CV @ config | 1.00 / 1.00 / 0.97 | 0.83 / 1.00 / 0.93 |
+| threshold terkalibrasi (CV, FPR ≤ target) | 40.4 | 52.1 |
+| akurasi val / test / CV @ config | 1.00 / 1.00 / 1.00 | 0.83 / 1.00 / 0.93 |
 | test TN FP FN TP @ config | 4 0 0 4 | 4 0 0 4 |
 | akurasi val / test / CV @ kalibrasi | 1.00 / 1.00 / 0.97 | 1.00 / 1.00 / 0.97 |
 | test TN FP FN TP @ kalibrasi | 4 0 0 4 | 4 0 0 4 |
-| latency per roti (ms, CPU, setelah pemanasan) | 4.0 | 24.8 |
+| latency per roti (ms, CPU, setelah pemanasan) | 1.9 | 24.8 |
 | ukuran file model | 3 kB | 10.0 MB |
 | domain check konveyor: REJECT config / kalibrasi (dari 15 roti OK) | 0 / 0 | 11 / 5 |
-| domain check: skor min / median / maks | 1 / 5 / 32 | 48 / 51 / 58 |
-| skor rata-rata bagus (CV out-of-fold) | 11.6 | 42.9 |
-| skor rata-rata medium-good (CV out-of-fold) | 7.1 | 45.9 |
-| skor rata-rata medium-bad (CV out-of-fold) | 90.7 | 56.0 |
-| skor rata-rata bad (CV out-of-fold) | 92.6 | 59.3 |
-| skor rata-rata bagus (test) | 2.5 | 36.8 |
-| skor rata-rata medium-good (test) | 7.7 | 45.9 |
-| skor rata-rata medium-bad (test) | 75.9 | 57.5 |
-| skor rata-rata bad (test) | 97.5 | 59.6 |
+| domain check: skor min / median / maks | 1 / 3 / 15 | 48 / 51 / 58 |
+| skor rata-rata bagus (CV out-of-fold) | 5.5 | 42.9 |
+| skor rata-rata medium-good (CV out-of-fold) | 3.5 | 45.9 |
+| skor rata-rata medium-bad (CV out-of-fold) | 92.9 | 56.0 |
+| skor rata-rata bad (CV out-of-fold) | 98.6 | 59.3 |
+| skor rata-rata bagus (test) | 0.4 | 36.8 |
+| skor rata-rata medium-good (test) | 3.4 | 45.9 |
+| skor rata-rata medium-bad (test) | 69.4 | 57.5 |
+| skor rata-rata bad (test) | 99.6 | 59.6 |
 
 <!-- REKOMENDASI: teks di bawah baris ini ditulis manual, dipertahankan compare.py -->
+
+> **Update 2026-11-08 (perbaikan resolusi scorer A):** tabel di atas sudah memakai scorer A baru
+> (crop kanonik 64 px + augmentasi resolusi). Teks di bawah ditulis untuk model lama (crop 192,
+> kalibrasi 48.9) dan dipertahankan sebagai riwayat. Detail perubahan dan angka baru:
+> [`results_real_video.md`](results_real_video.md#run-2-setelah-perbaikan-resolusi).
 
 ## Domain check: foto konveyor asli (`train-data/domain-check/conveyor_good_01.webp`)
 

@@ -43,7 +43,7 @@ segmentasi ──► tracking ──► garis keputusan ──► scorer ──�
 |---|---|
 | Segmentasi | OpenCV: saturasi HSV + Otsu, kontur per roti, ROI opsional, roti di tepi frame diabaikan |
 | Tracking | centroid tracker; tiap roti diputuskan **tepat sekali** saat melintasi garis |
-| **Scorer A, baseline (dipakai)** | 25 fitur tekstur, kilap, warna, dan bentuk → logistic regression (scikit-learn); skor = 100 × P(kempes); sekitar 5 ms/roti, model 3 kB |
+| **Scorer A, baseline (dipakai)** | 25 fitur tekstur, kilap, warna, dan bentuk dari crop kanonik 64 px → logistic regression (scikit-learn), dilatih dengan augmentasi resolusi (roti 50–200 px + JPEG); skor = 100 × P(kempes); sekitar 2–10 ms/roti, model 3 kB |
 | Scorer B, anomaly (eksperimen) | "PatchCore-lite": ResNet18 beku + memory bank roti normal (PyTorch CPU); butuh refit untuk domain konveyor |
 | Output | overlay real-time (kotak, skor, OK/REJECT, FPS, penghitung), snapshot setiap REJECT, `decisions.csv` |
 
@@ -56,16 +56,19 @@ darinya.
 
 | | Scorer A |
 |---|---|
-| Roti kempes REJECT | **5/5** (skor 66–95) |
-| Roti OK lolos | **15/15** (skor 2–31) |
+| Roti kempes REJECT | **5/5** (skor 64–99) |
+| Roti OK lolos | **15/15** (skor 0–7) |
 | AUROC | 1.00 |
 
-Gambar di bagian atas README adalah hasil ini. Detailnya ada di
+Gambar di bagian atas README adalah hasil ini (model setelah perbaikan resolusi). Detailnya ada di
 [`docs/domain_check_mixed.md`](docs/domain_check_mixed.md). Pada foto konveyor kedua yang berisi 15 roti
-bagus, scorer A me-reject 0 roti.
+bagus, scorer A me-reject 0 roti (skor 0–15). Catatan: kedua foto ini ikut dipakai sebagai data
+validasi saat memilih perbaikan resolusi, jadi bukan uji independen lagi.
 
 ### 2. Video konveyor 10 detik
-Video dari user: 360×640 px, 24 fps. Pipeline dijalankan dengan config apa adanya.
+Video dari user: 360×640 px, 24 fps, lebar roti hanya sekitar 55–75 px. Video ini data uji hold-out:
+tidak dipakai untuk memilih metode atau threshold. Gambar di bawah dari **Run 2** (setelah perbaikan
+resolusi), threshold config 50.
 
 <p align="center">
   <img src="docs/images/real_video_demo.gif" width="216" alt="Animasi hasil pipeline pada video konveyor 10 detik">
@@ -79,21 +82,28 @@ Keputusan untuk setiap roti yang melintasi garis, dengan crop diambil pada frame
   <img src="docs/images/real_video_decisions.jpg" width="760" alt="Crop 9 roti yang diputuskan beserta skor, keputusan, dan penilaian visual">
 </p>
 
-| | Hasil |
-|---|---|
-| Roti diputuskan / duplikat | 9 / 0 (tracking benar) |
-| Roti kempes REJECT | 1/1 (skor 100) |
-| **Roti OK ikut ter-reject** | **7/8**, salah tolak tinggi |
+| | Run 1 (model lama) | **Run 2 (setelah perbaikan)** |
+|---|---|---|
+| Roti diputuskan / duplikat | 9 / 0 | 9 / 0 (tracking benar) |
+| Roti kempes REJECT | 1/1 (skor 100) | **1/1** (skor 99) |
+| Roti OK ikut ter-reject | **7/8**, gagal | **0/8** (skor 0–7, kecuali satu roti 48) |
 
-**Hasil ini dilaporkan apa adanya: di video beresolusi rendah ini scorer A gagal.** Penyebabnya sudah
-diuji dan terbukti **resolusi**:
+**Run 1 gagal, dan dilaporkan apa adanya.** Penyebabnya diuji dan terbukti **resolusi**: foto
+konveyor yang diperkecil ke skala video langsung naik salah tolaknya dari 0/15 menjadi 8/15 dan 5/15.
+Fitur tekstur/kilap dihitung dari crop 192 px, sehingga roti kecil yang diperbesar tampak "kempes".
 
-- Lebar roti di video hanya sekitar 55–75 px, sedangkan di foto konveyor sekitar 130–190 px.
-- Foto konveyor yang sama, diperkecil ke skala video, langsung naik salah tolaknya dari 0/15 menjadi
-  8/15 dan dari 0/15 menjadi 5/15.
+**Perbaikan:** fitur kini dihitung dari crop kanonik kecil (64 px, parameter piksel diskalakan 1/3),
+dan classifier dilatih dengan salinan foto yang diperkecil ke roti 50–200 px + kompresi JPEG.
+Metode dipilih hanya dari CV studio dan dua foto konveyor yang diperkecil (tanpa video). Di validasi itu
+salah tolak pada skala video turun dari 8/15 dan 5/15 menjadi 0/15 dan 0/15, kempes tetap 5/5.
+Setelah metode dibekukan, video dijalankan **sekali**: hasilnya Run 2 di atas.
 
-Perbaikannya: pastikan lebar roti di frame kamera **≥ sekitar 130 px**, dan/atau latih ulang dengan data
-dari kamera konveyor. Analisis lengkap ada di [`docs/results_real_video.md`](docs/results_real_video.md).
+Caveat: n kecil (9 roti, 1 kempes); satu roti OK mendapat skor 47.7, hanya sedikit di bawah threshold 50
+(akan REJECT pada saran kalibrasi 40.4). Di frame ketiga, roti #4 (OK, skor 7) tampak berlekuk
+bintang **setelah** melewati garis. Di frame keputusan (frame 150) permukaannya masih mulus, jadi
+bentuknya berubah di dalam video itu sendiri. Keputusan diambil sekali saat melintas, sesuai desain.
+Analisis lengkap, tabel validasi per skala, dan caveat ada di
+[`docs/results_real_video.md`](docs/results_real_video.md).
 
 ### 3. Uji pipeline real-time (video SYNTHETIC)
 Video demo dibuat dengan menggeser dua foto konveyor, menghasilkan 70 roti dengan posisi yang
@@ -105,7 +115,7 @@ diketahui. Uji ini membuktikan logika pipeline (tracking dan penghitungan), **bu
 
 | Diharapkan / diputuskan | Duplikat / terlewat | Miscount | Kempes REJECT | OK ter-reject | Kecepatan |
 |---|---|---|---|---|---|
-| 70 / 70 | 0 / 0 | **0%** | 10/10 | 0/60 | sekitar 80 FPS (CPU 4 core) |
+| 70 / 70 | 0 / 0 | **0%** | 10/10 | 0/60 | sekitar 90 FPS (CPU 4 core) |
 
 Detail: [`docs/results_m4.md`](docs/results_m4.md).
 
@@ -119,22 +129,24 @@ pernah disetel dari test set.
 
 | | Scorer A | Scorer B |
 |---|---|---|
-| AUROC cross-validation (train+val) | 0.988 ± 0.025 | 1.000 |
+| AUROC cross-validation (train+val) | 1.000 (model lama 0.988 ± 0.025) | 1.000 |
 | Test (4+4 foto) | 8/8 benar | 8/8 benar |
 | Foto konveyor: roti OK ter-reject | **0/15** | 15/15 (gagal, beda domain) |
+| Threshold terkalibrasi (CV, FPR ≤ 0.05) | 40.4 (config tetap 50) | 52.1 |
 
 Detail: [`docs/results_m3.md`](docs/results_m3.md).
 
 ## Keterbatasan
 - **Data latih kecil dan berbeda domain.** Model dilatih dari 48 foto studio, belum dari kamera
   konveyor.
-- **Bergantung pada resolusi.** Scorer A bekerja baik pada foto konveyor beresolusi cukup, tapi
-  gagal saat roti hanya sekitar 60 px (video 360p).
+- **Resolusi masih punya batas bawah.** Setelah perbaikan, scorer A lolos validasi sampai lebar roti
+  sekitar 50–60 px dan lolos video 360p (roti 55–75 px). Di bawah sekitar 55 px salah tolak muncul
+  lagi, dan bukti video baru satu klip pendek (9 roti, 1 kempes).
 - **Scorer A banyak memakai kilap dan warna**, bukan hanya kerutan. Variasi pencahayaan bisa
   memengaruhi skor.
 - **Scorer B** baru layak setelah memory bank-nya diisi ulang dari roti bagus di kamera konveyor.
 - **Langkah berikutnya:**
-  - kumpulkan foto atau video roti OK dan kempes dari kamera produksi (resolusi cukup);
+  - kumpulkan foto atau video roti OK dan kempes dari kamera produksi (lebar roti sebaiknya ≥ 80 px);
   - latih ulang dan kalibrasi threshold di data validasi;
   - uji kamera minimal 5 menit (PRD §9);
   - opsional M5: export ONNX, uji di Raspberry Pi, sinyal keluaran untuk aktuator.
@@ -190,7 +202,7 @@ terus berjalan.
 |---|---|
 | [`docs/USAGE.md`](docs/USAGE.md) | panduan lengkap: instalasi, data, config, alur kerja, output, CLI, troubleshooting |
 | [`docs/PRD.md`](docs/PRD.md) | tujuan, requirement, acceptance criteria, status milestone |
-| [`docs/results_real_video.md`](docs/results_real_video.md) | uji video konveyor 10 detik + diagnosis resolusi |
+| [`docs/results_real_video.md`](docs/results_real_video.md) | uji video konveyor 10 detik: Run 1 gagal, diagnosis resolusi, perbaikan + Run 2 |
 | [`docs/domain_check_mixed.md`](docs/domain_check_mixed.md) | uji foto konveyor campuran (bagus + kempes) |
 | [`docs/results_m3.md`](docs/results_m3.md) | perbandingan scorer A vs B, kalibrasi threshold |
 | [`docs/results_m4.md`](docs/results_m4.md) | uji pipeline real-time (video SYNTHETIC) |

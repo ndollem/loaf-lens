@@ -36,10 +36,10 @@ dua scorer dengan antarmuka sama:
 
 | | Scorer A — baseline (`configs/baseline.yaml`) | Scorer B — anomaly (`configs/anomaly.yaml`) |
 |---|---|---|
-| Metode | segmentasi → 25 fitur tekstur/warna/bentuk → StandardScaler + logistic regression | "PatchCore-lite": ResNet18 ImageNet **beku** sebagai feature extractor + memory bank patch roti normal |
+| Metode | segmentasi → crop kanonik 64 px → 25 fitur tekstur/warna/bentuk → StandardScaler + logistic regression (+ augmentasi resolusi saat fit) | "PatchCore-lite": ResNet18 ImageNet **beku** sebagai feature extractor + memory bank patch roti normal |
 | Data latih | roti normal **dan** kempes | roti normal saja |
 | Skor | `100 · P(kempes)` | jarak kNN patch terjauh, dinormalisasi: 50 ≈ roti normal train yang paling aneh |
-| Kecepatan / ukuran | ≈ 4 ms/roti, model 3 kB | ≈ 25 ms/roti, model 10 MB (+ bobot ResNet18 47 MB) |
+| Kecepatan / ukuran | ≈ 2–10 ms/roti, model 3 kB | ≈ 25 ms/roti, model 10 MB (+ bobot ResNet18 47 MB) |
 | Status | **direkomendasikan, dipakai demo** | belum layak di konveyor tanpa refit |
 
 **Status milestone** (detail: [`PRD.md` §13](PRD.md#13-status)):
@@ -56,13 +56,17 @@ dua scorer dengan antarmuka sama:
 > **Catatan jujur — baca sebelum memakai angka apa pun**
 > - Model dilatih dari **48 foto studio** (24 normal + 24 kempes, satu roti per foto, bukan foto
 >   konveyor). Test set hanya 4+4 foto → AUROC 1.000 di test tidak berarti banyak; acuan utama CV
->   (A 0.988, B 1.000). Semua angka = **indikasi kelayakan, bukan akurasi produksi**.
+>   (A 1.000 setelah perbaikan resolusi, dulu 0.988; B 1.000). Semua angka = **indikasi kelayakan, bukan akurasi produksi**.
 > - **Scorer A direkomendasikan.** Di 2 foto konveyor asli A: 0/15 roti bagus ter-reject dan 5/5
 >   kempes tertangkap ([`domain_check_mixed.md`](domain_check_mixed.md)). A bersandar pada
 >   kilap/warna, jadi hasil baik ini bisa sebagian "benar karena alasan kurang tepat".
 > - **Scorer B gagal di domain konveyor tanpa refit:** memory bank-nya berisi roti studio, sehingga
 >   5–11/15 roti bagus (foto 1) dan 20/20 roti (foto 2) di-REJECT. B perlu memory bank dari roti bagus
 >   yang direkam kamera konveyor.
+> - **Video konveyor 10 detik dari user (360p, roti ~55–75 px):** model lama me-reject 7/8 roti OK;
+>   setelah perbaikan resolusi (crop kanonik 64 px + augmentasi resolusi, dipilih tanpa melihat video)
+>   0/8 OK ter-reject dan kempes 1/1, dijalankan sekali ([`results_real_video.md`](results_real_video.md)).
+>   n kecil; satu roti OK skor 47.7, dekat threshold 50.
 > - **Video demo adalah SYNTHETIC** (foto diam yang digeser). Hasil 70/70 roti diputuskan tepat
 >   sekali hanya membuktikan logika pipeline, **bukan** akurasi deteksi.
 
@@ -386,13 +390,14 @@ nilainya ditulis di kolom keterangan.
 |---|---|---|---|
 | `type` | `baseline` | `baseline` \| `anomaly` | jenis scorer |
 | `train_labels` | `[normal, defect]` | subset tak kosong dari `normal`, `defect` | label yang dipakai fit |
-| `params.crop_size` | 192 | int ≥ 32 | crop bbox → sisi terpanjang px (aspek dijaga, pad) |
+| `params.crop_size` | 64 | int ≥ 32 | resolusi kanonik: crop bbox → sisi terpanjang px (aspek dijaga, pad). Kecil = roti 50–200 px tampak mirip bagi fitur (dulu 192; lihat [`results_real_video.md`](results_real_video.md)) |
+| `params.augment` | `{copies: 4, bun_px: [50, 200], jpeg_quality: [40, 90]}` | `null` atau ketiga kunci; `copies` int ≥ 0; `bun_px` [min, max] int, 16 ≤ min ≤ max; `jpeg_quality` [min, max] int 1–100 | augmentasi resolusi saat fit: per foto latih `copies` salinan, roti diperkecil ke `bun_px` (log-uniform, tidak diperbesar) + JPEG `jpeg_quality`, disegmentasi ulang, label sama. RNG = `seed` + isi gambar. Di CV hanya dipakai di fold latih. `null` = mati |
 | `params.classifier` | `logistic_regression` | `logistic_regression` \| `random_forest` \| `svm` | classifier sklearn |
 | `params.classifier_params.<nama>` | lihat config | bebas (hyperparameter sklearn) | hanya milik classifier terpilih yang dipakai |
-| `params.features.erode_px` | 9 | — | erosi mask sebelum statistik tekstur |
-| `params.features.texture_blur_sigma` | 1.5 | — | blur sebelum tekstur (0 = mati; default kode 0) |
+| `params.features.erode_px` | 3 | int ≥ 0, 2·v+1 ≤ crop_size/4 | erosi mask (px pada crop) sebelum statistik tekstur (dulu 9 @ crop 192) |
+| `params.features.texture_blur_sigma` | 0.5 | ≥ 0 | blur sebelum tekstur (0 = mati; default kode 0; dulu 1.5 @ crop 192) |
 | `params.features.canny` | `[50, 150]` | — | threshold Canny (kepadatan tepi/kerutan) |
-| `params.features.crease_px` | 6 | — | radius kernel black-hat untuk alur lipatan |
+| `params.features.crease_px` | 2 | int ≥ 0, 2·v+1 ≤ crop_size/4 | radius kernel black-hat untuk alur lipatan (dulu 6 @ crop 192) |
 | `params.features.specular_v` / `specular_s` | 230 / 60 | — | piksel kilap: V ≥ v dan S ≤ s (HSV 0–255) |
 
 ### `model` — scorer B (`anomaly.yaml`)
@@ -481,9 +486,10 @@ serta `suggested_threshold`. Aturan: threshold terendah dengan FPR ≤ `eval.fpr
 normal, lalu digeser ke tengah celah menuju skor kempes terendah di atasnya.
 
 **Config tidak diubah otomatis.** Untuk menerapkan: buka `configs/baseline.yaml`, ganti `threshold:`
-dengan `suggested_threshold` (mis. `threshold: 48.9`), catat keputusannya di `docs/PRD.md`, lalu
-jalankan ulang `make evaluate` / demo. Saat ini config tetap 50 (saran A 48.9, B 52.1; praktis sama
-untuk A).
+dengan `suggested_threshold` (mis. `threshold: 40.4`), catat keputusannya di `docs/PRD.md`, lalu
+jalankan ulang `make evaluate` / demo. Saat ini config tetap 50 (saran A 40.4 setelah perbaikan
+resolusi — dulu 48.9; B 52.1). Untuk A, 50 sudah FPR 0/20 dan recall 20/20 di CV; saran 40.4 hanya
+memakai jatah 1 false positive dari target FPR 5%.
 
 ### 6.3 Scorer B: latih, evaluasi, bandingkan
 
@@ -522,9 +528,19 @@ make domain-check CONFIG=configs/baseline.yaml
 make domain-check CONFIG=configs/baseline.yaml DOMAIN_IMG=train-data/domain-check/conveyor_mixed_01.webp
 ```
 
-Default `DOMAIN_IMG` = `conveyor_good_01.webp`, default `CONFIG` = `configs/baseline.yaml` (scorer A). Output:
-`outputs/<run>/domain_check.jpg` (kontur + `#nomor skor OK/REJECT`, plus keputusan pada threshold
-kalibrasi bila `calibration.yaml` ada) dan `domain_check.md` (tabel skor). File ini menimpa domain
+Uji ketahanan resolusi: perkecil foto dulu dengan `DOMAIN_SCALE` (CLI `--domain-scale`, (0, 1],
+INTER_AREA), mis. ×0.383 ≈ skala video 360p:
+
+```bash
+make domain-check DOMAIN_IMG=train-data/domain-check/conveyor_mixed_01.webp DOMAIN_SCALE=0.383
+```
+
+Default `DOMAIN_IMG` = `conveyor_good_01.webp`, default `CONFIG` = `configs/baseline.yaml` (scorer A),
+default `DOMAIN_SCALE` = 1. Output: `outputs/<run>/domain_check.jpg` (atau `domain_check_x<S>.jpg`
+bila diperkecil; kontur + `#nomor skor OK/REJECT`, plus keputusan pada threshold kalibrasi bila
+`calibration.yaml` ada) dan `.md` (tabel skor). Bila `labels.json` di folder foto punya entri foto
+itu, `.md` dan log juga memuat **kempes tertangkap / roti OK ter-reject** (threshold config; objek
+yang bbox-nya memuat titik kempes = kempes). File ini menimpa domain
 check dari `make evaluate`. Foto domain check baru: taruh di `train-data/domain-check/` dengan nama
 deskriptif dan catat labelnya di `data/README.md` (dan `labels.json` bila dipakai untuk video demo).
 
@@ -790,6 +806,7 @@ roti normal train yang paling aneh", dan margin normal vs kempes B sempit (studi
 
 Diverifikasi dengan `make -n <target>`. Variabel yang bisa di-override: `CONFIG` (default
 `configs/baseline.yaml`), `DOMAIN_IMG` (default `train-data/domain-check/conveyor_good_01.webp`),
+`DOMAIN_SCALE` (default `1`),
 `APP_CONFIG` (default `configs/baseline.yaml`), `DEMO_VIDEO` (default `samples/demo.mp4`),
 `CAMERA` (default `0`), `UV` (default `uv`).
 
@@ -808,7 +825,7 @@ Diverifikasi dengan `make -n <target>`. Variabel yang bisa di-override: `CONFIG`
 | `evaluate-anomaly` | `python -m loaflens.evaluate --config configs/anomaly.yaml` | `outputs/anomaly/`, `docs/results_m3_anomaly.md` |
 | `calibrate` | `python -m loaflens.calibrate --config $(CONFIG)` | `outputs/<run>/calibration.yaml` |
 | `compare` | `python -m loaflens.compare configs/baseline.yaml configs/anomaly.yaml` | `outputs/compare.md`, `docs/results_m3.md` |
-| `domain-check` | `python -m loaflens.evaluate --config $(CONFIG) --domain-check "$(DOMAIN_IMG)"` | `outputs/<run>/domain_check.{jpg,md}` |
+| `domain-check` | `python -m loaflens.evaluate --config $(CONFIG) --domain-check "$(DOMAIN_IMG)" --domain-scale $(DOMAIN_SCALE)` | `outputs/<run>/domain_check[_x<S>].{jpg,md}` |
 | `demo-video` | `python -m loaflens.synth --config $(APP_CONFIG) --out $(DEMO_VIDEO)` | `samples/demo.mp4` + `demo.gt.json` |
 | `demo` | `python -m loaflens.app --config $(APP_CONFIG) --source video:$(DEMO_VIDEO) --headless --out outputs/demo_out.mp4 --gt samples/demo.gt.json` | video beranotasi + `outputs/app/` |
 | `demo-live` | `python -m loaflens.app --config $(APP_CONFIG) --source video:$(DEMO_VIDEO)` | jendela |
@@ -830,7 +847,7 @@ root repo (path di config relatif terhadap direktori kerja). Opsi di bawah sesua
 | `loaflens.data` | `--config CONFIG` (wajib), `--force` | bangun manifest + split; `--force` = timpa manifest (split ulang!) |
 | `loaflens.audit` | `--config CONFIG` (wajib) | audit dataset → `audit.report` (+ `audit.docs_copy`) |
 | `loaflens.train` | `--config CONFIG` (wajib) | latih scorer dari split train → `output.dir` |
-| `loaflens.evaluate` | `--config CONFIG` (wajib), `--domain-check FOTO` | evaluasi lengkap; dengan `--domain-check` **hanya** domain check satu foto |
+| `loaflens.evaluate` | `--config CONFIG` (wajib), `--domain-check FOTO`, `--domain-scale S` | evaluasi lengkap; dengan `--domain-check` **hanya** domain check satu foto (diperkecil ×S bila S < 1) |
 | `loaflens.calibrate` | `--config CONFIG` (wajib) | saran threshold dari CV train+val → `calibration.yaml` |
 | `loaflens.compare` | `configs [configs ...]` (posisional) | tabel dari `metrics.json` config yang sudah di-evaluate → `outputs/compare.md` + `docs/results_m3.md` |
 | `loaflens.synth` | lihat tabel di bawah | video demo SYNTHETIC + ground truth |

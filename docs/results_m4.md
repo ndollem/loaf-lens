@@ -95,3 +95,10 @@ frame) mengikuti tempo video ±28–30 fps.
    di garis lebih lama dari `max_missed` frame akan terlewat, bukan dihitung dua kali.
 5. `track.direction` di config diubah ke `top_to_bottom` agar sesuai video demo. Untuk kamera
    sungguhan, arah dan `line_pos` wajib disesuaikan dengan gambar kamera.
+
+## Update 2026-11-08: scorer A setelah perbaikan resolusi
+Diulang dengan scorer A baru (crop kanonik 64 px + augmentasi resolusi; lihat
+[`results_real_video.md`](results_real_video.md#run-2-setelah-perbaikan-resolusi)), `make demo`:
+70/70 diputuskan tepat sekali, miscount 0%, kempes 10/10 REJECT, roti OK ikut REJECT 0/60
+(sama seperti sebelumnya). Skor kempes terendah 66 vs roti OK tertinggi 15 (dulu 59 vs 36); ±94 FPS,
+skor ≈ 3 ms/roti. Tetap SYNTHETIC — bukan untuk evaluasi akurasi.
