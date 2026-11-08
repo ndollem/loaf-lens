@@ -43,7 +43,7 @@ Pipeline runtime: `capture → segment (ROI + isolasi roti) → track (satu roti
 ## 6. Requirement fungsional
 | ID | Requirement | Prioritas |
 |---|---|---|
-| F1 | Training dari folder `data/normal/` (dan `data/defect/` untuk baseline) via CLI + config YAML | Must |
+| F1 | Training dari folder `data/normal/` dan `data/defect/` (kempes ikut dilatih untuk baseline A; anomaly B hanya normal) via CLI + config YAML | Must |
 | F2 | Evaluasi pada hold-out set: AUROC, recall pada FPR tetap, confusion matrix, kurva ROC, daftar kesalahan terbesar | Must |
 | F3 | Skor kontinu 0–100 per roti, threshold dari config | Must |
 | F4 | Sumber input: `camera:<id>` dan `video:<file>` | Must |
@@ -66,7 +66,8 @@ Pipeline runtime: `capture → segment (ROI + isolasi roti) → track (satu roti
 ## 8. Data
 - Sumber: foto roti asli dari client + (opsional) foto yang kita ambil sendiri.
 - Folder: `data/normal/`, `data/defect/`, `data/raw/` (lihat CLAUDE.md).
-- Kebutuhan awal (perkiraan, divalidasi di M1): ≥ 200 foto normal; ≥ 30–50 foto kempes untuk validasi/test; variasi pencahayaan, posisi, dan batch.
+- Kebutuhan awal (perkiraan, divalidasi di M1): ≥ 200 foto normal; ≥ 30–50 foto kempes (train baseline A + validasi/test); variasi pencahayaan, posisi, dan batch.
+- Kedua folder (normal & kempes) di-split train/val/test per batch dengan aturan yang sama.
 - Split per sesi/batch. Test set dibekukan sebelum tuning apa pun.
 - **Perbedaan domain:** latih dari foto roti asli, uji dari video di layar → catat sebagai risiko; sediakan juga uji dengan file video langsung (tanpa rekam layar) untuk memisahkan efek model vs efek kamera/layar.
 
@@ -116,4 +117,6 @@ Jika target tidak tercapai, laporan harus menjelaskan penyebab (data, sudut kame
 | M5 (opsional) | Uji Raspberry Pi / export ONNX, hook sinyal | Benchmark latency |
 
 ## 13. Status
-- [ ] M0  - [ ] M1  - [ ] M2  - [ ] M3  - [ ] M4  - [ ] M5
+- [x] M0  - [ ] M1  - [ ] M2  - [ ] M3  - [ ] M4  - [ ] M5
+
+- 2026-11-08 · M0 selesai: skeleton repo, `configs/{baseline,anomaly}.yaml` + validasi (`src/loaflens/config.py`), Makefile (`setup`/`test`/`lint`), `data/README.md`. Python **3.14** (numpy, opencv-python-headless, scikit-learn, torch, anomalib punya dukungan 3.14). Keputusan: training memakai normal **dan** kempes (scorer A supervised); scorer B tetap normal-only. Kamera `top`/`oblique` dan arah konveyor jadi field config.

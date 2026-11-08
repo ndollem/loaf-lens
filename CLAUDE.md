@@ -13,7 +13,7 @@ Detail tujuan & requirement: `docs/PRD.md`. Baca itu dulu.
 - Jujur soal hasil: laporkan metrik apa adanya; jangan tuning threshold di test set.
 
 ## Stack (default, boleh diusulkan alternatif dengan alasan)
-- Python 3.11, `uv` atau `pip` + `requirements.txt` terkunci
+- Python 3.14 (lihat `.python-version`), `uv` atau `pip` + `requirements.txt` terkunci
 - OpenCV (capture, segmentasi, tracking sederhana)
 - Baseline klasik: scikit-learn (fitur bentuk/warna → SVM/RandomForest/IsolationForest)
 - Anomaly detection: `anomalib` (PatchCore / EfficientAd), export ONNX/OpenVINO bila perlu
@@ -30,9 +30,10 @@ loaf-lens/
 ├── data/            # LIHAT ATURAN DATA di bawah
 │   ├── raw/         # foto asli dari client (gitignored)
 │   ├── normal/      # roti OK untuk training (gitignored)
-│   ├── defect/      # roti kempes, HANYA untuk validasi/test (gitignored)
+│   ├── defect/      # roti kempes: train (scorer A) + val/test, split per batch (gitignored)
 │   └── README.md    # cara mengisi, konvensi penamaan, ukuran dataset
 ├── src/loaflens/
+│   ├── config.py    # load + validasi configs/*.yaml
 │   ├── capture.py   # sumber: camera / video file
 │   ├── segment.py   # ekstrak roti per frame (ROI, thresholding/background subtraction)
 │   ├── track.py     # satu roti = satu keputusan (garis keputusan / centroid tracking)
@@ -48,6 +49,7 @@ loaf-lens/
 ## Aturan data
 - **Jangan commit** gambar/video asli, model besar, atau output eksperimen. Pastikan `.gitignore` mencakup `data/*`, `outputs/`, `*.onnx`, `*.pt`, kecuali `data/README.md`.
 - Pisahkan split **per batch/sesi pengambilan**, bukan acak per gambar, untuk menghindari kebocoran (frame mirip di train & test).
+- Training memakai **kedua** folder: `normal/` dan `defect/` di-split train/val/test per batch. Scorer A (baseline) dilatih supervised dari normal + kempes; scorer B (anomaly) `fit` dari normal saja, kempes hanya untuk val/test.
 - `data/normal/` hanya berisi roti yang benar-benar normal (konfirmasi manusia). Satu roti kempes yang nyelip ke normal merusak model anomaly.
 - Catat metadata (tanggal, kamera, pencahayaan, jenis roti) di `data/manifest.csv`.
 
@@ -66,7 +68,9 @@ loaf-lens/
 
 ## Perintah (diisi saat dibuat)
 ```
-make setup | make test | make lint
+make setup | make test | make lint | make format | make lock
+# belum tersedia (M2–M4):
+python -m loaflens.train --config configs/baseline.yaml
 python -m loaflens.train --config configs/anomaly.yaml
 python -m loaflens.evaluate --config configs/anomaly.yaml
 python -m loaflens.app --source video:samples/demo.mp4

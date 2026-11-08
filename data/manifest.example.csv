@@ -1,0 +1,4 @@
+path,label,batch_id,date,camera,camera_view,lighting,bread_type,split
+data/normal/20261110_s1/20261110_s1_001.jpg,normal,20261110_s1,2026-11-10,hp_contoh,top,lampu_pabrik,roti_tawar,
+data/defect/20261110_s1/20261110_s1_002.jpg,defect,20261110_s1,2026-11-10,hp_contoh,top,lampu_pabrik,roti_tawar,
+data/normal/20261111_s1/20261111_s1_001.jpg,normal,20261111_s1,2026-11-11,hp_contoh,oblique,siang_jendela,roti_tawar,

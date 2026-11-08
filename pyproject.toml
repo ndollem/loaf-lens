@@ -1,0 +1,37 @@
+[project]
+name = "loaflens"
+version = "0.0.1"
+description = "POC visi komputer low-cost untuk mendeteksi roti kempes di konveyor"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "numpy",
+    # Headless: tanpa jendela GUI (cv2.imshow). M4 (UI demo) mungkin butuh `opencv-python`;
+    # diputuskan nanti. Jangan pasang keduanya bersamaan.
+    "opencv-python-headless",
+    "scikit-learn",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/loaflens"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

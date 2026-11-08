@@ -1,0 +1,31 @@
+# Scorer B — anomaly detection (M3): latih dari roti normal saja; kempes hanya untuk val/test.
+seed: 42
+
+data:
+  normal_dir: data/normal
+  defect_dir: data/defect
+  manifest: data/manifest.csv
+  split_by: batch_id          # split per batch/sesi, BUKAN acak per gambar
+  split: {train: 0.70, val: 0.15, test: 0.15}
+
+camera:
+  view: top                   # top | oblique (miring ~45°)
+  roi: null                   # [x, y, w, h] fraksi frame 0–1; null = seluruh frame
+
+segment: {}                   # placeholder — diisi di M4
+
+track:
+  direction: left_to_right    # left_to_right | right_to_left | top_to_bottom | bottom_to_top
+  line_pos: 0.5               # garis keputusan, fraksi frame searah gerak konveyor
+
+model:
+  type: anomaly
+  train_labels: [normal]      # defect di split train tidak dipakai untuk fit
+  params:                     # belum dipakai — M3
+    method: patchcore
+    image_size: 256
+
+threshold: 50                 # skor 0–100; REJECT jika skor >= threshold (kalibrasi di val, bukan test)
+
+output:
+  dir: outputs/anomaly
