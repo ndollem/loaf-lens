@@ -29,6 +29,11 @@ segment:                      # isolasi roti dari latar polos (kanal saturasi HS
   morph_kernel: 7             # kernel elips open/close (ganjil)
   min_area_frac: 0.02         # kontur terbesar < fraksi frame ini = segmentasi gagal
   crop_margin: 0.05           # margin crop di sekitar bbox (fraksi sisi bbox)
+  # banyak roti per frame (segment_all: domain check konveyor, M4)
+  obj_min_area_frac: 0.003    # luas objek min/maks, fraksi luas ROI/frame
+  obj_max_area_frac: 0.15
+  drop_border: true           # buang roti yang menyentuh tepi ROI/frame (terpotong)
+  obj_min_value: 40           # V < ini dinolkan (bayangan kontak gelap di konveyor)
 
 track:
   direction: left_to_right    # left_to_right | right_to_left | top_to_bottom | bottom_to_top
@@ -54,10 +59,12 @@ model:
 
 threshold: 50                 # skor 0–100; REJECT jika skor >= threshold (kalibrasi di val, bukan test)
 
-eval:                         # python -m loaflens.evaluate
-  fpr_target: 0.05            # recall dilaporkan pada FPR <= target (kasar: val/test 3–4 normal)
+eval:                         # python -m loaflens.evaluate / calibrate
+  fpr_target: 0.05            # target FPR untuk recall & kalibrasi threshold (dari CV train+val)
   cv_folds: 5                 # StratifiedGroupKFold pada train+val (test TIDAK ikut)
   top_errors: 5               # jumlah kesalahan terbesar per split
+  docs_copy: docs/results_m3_baseline.md   # docs/results_m2.md = snapshot M2 (dibekukan)
+  domain_check: [train-data/domain-check/conveyor_good_01.webp]   # semua roti OK; tidak dilatih
 
 output:
   dir: outputs/baseline

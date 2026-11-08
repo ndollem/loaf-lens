@@ -16,6 +16,15 @@ spasi/kurung (mis. `bagus (3).png`).
 > Isi `data/` lainnya tetap **di-gitignore** (kecuali file ini dan `manifest.example.csv`):
 > jangan commit foto/video client lain, model, atau output eksperimen.
 
+## Domain check: `train-data/domain-check/` (M3)
+
+Foto konveyor asli dari user untuk **cek domain saja — tidak pernah dipakai untuk training, split,
+atau tuning** (folder ini di luar `data.normal_dir`/`data.defect_dir`, tidak masuk manifest).
+`conveyor_good_01.webp` (941x1672): belt mesh abu gelap tampak atas/miring, ±19 roti bulat mengilap,
+**semua layak**. `segment_all` + scorer menilai tiap roti; karena semua OK, setiap REJECT = false
+positive (`eval.domain_check` di config; `make domain-check`). Tambahkan foto lain dengan nama yang
+menjelaskan isinya (mis. `conveyor_mixed_01.jpg`) dan catat labelnya di sini.
+
 ## Isi saat ini (M1, 2026-11-08)
 
 - `train-data/good-loaf/`: 24 PNG normal (`bagus (0..11)`, `medium (0..11)`), semua 312x417.

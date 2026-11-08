@@ -11,6 +11,10 @@ dependencies = [
     "opencv-python-headless",
     "scikit-learn",
     "pyyaml",
+    # Scorer B (M3): backbone ResNet18 beku sebagai feature extractor. Wajib build CPU —
+    # `make setup`/`make lock` memakai `uv --torch-backend cpu` (lihat README).
+    "torch>=2.14",
+    "torchvision>=0.29",
 ]
 
 [project.optional-dependencies]

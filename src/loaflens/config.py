@@ -19,6 +19,8 @@ LABELS = {"normal", "defect"}
 SPLIT_KEYS = {"train", "val", "test"}
 SPLIT_BY = {"batch_id"}
 CLASSIFIERS = {"logistic_regression", "random_forest", "svm"}
+IMAGE_SCORES = {"max", "topk_mean"}
+BACKBONE_WEIGHTS = {"imagenet", None}
 
 
 class ConfigError(ValueError):
@@ -68,6 +70,11 @@ class SegmentConfig:
     morph_kernel: int = 7  # kernel elips open/close (ganjil)
     min_area_frac: float = 0.02  # kontur terbesar < fraksi ini dari frame = gagal
     crop_margin: float = 0.05  # margin crop di sekitar bbox, fraksi sisi bbox
+    # banyak roti per frame (segment_all; konveyor): luas objek sebagai fraksi luas ROI/frame
+    obj_min_area_frac: float = 0.003
+    obj_max_area_frac: float = 0.15
+    drop_border: bool = True  # buang objek yang menyentuh tepi ROI/frame (roti terpotong)
+    obj_min_value: int = 0  # piksel V < ini bukan roti (bayangan gelap); 0 = mati
 
 
 @dataclass
@@ -75,6 +82,9 @@ class EvalConfig:
     fpr_target: float = 0.05  # recall dilaporkan pada FPR <= target
     cv_folds: int = 5  # StratifiedGroupKFold pada train+val (test tidak ikut)
     top_errors: int = 5  # jumlah kesalahan terbesar yang dilaporkan per split
+    docs_copy: str | None = None  # salinan laporan ber-versi (mis. docs/results_m2.md)
+    domain_check: list[str] = field(default_factory=list)  # foto konveyor (semua roti OK)
+    heatmaps: bool = True  # anomaly: simpan overlay heatmap val/test ke output.dir/heatmaps/
 
 
 @dataclass
@@ -165,6 +175,8 @@ def validate(cfg: Config) -> None:
         _check_choice(p.get("classifier"), CLASSIFIERS, "model.params.classifier")
         if not isinstance(p.get("crop_size"), int) or p["crop_size"] < 32:
             raise ConfigError("model.params.crop_size harus int >= 32")
+    if cfg.model.type == "anomaly":
+        _validate_anomaly(cfg.model.params)
 
     sg = cfg.segment
     if sg.blur % 2 == 0 or sg.morph_kernel % 2 == 0 or sg.blur < 1 or sg.morph_kernel < 1:
@@ -173,9 +185,30 @@ def validate(cfg: Config) -> None:
         raise ConfigError("segment.sat_threshold harus null atau 0–255")
     if not 0 < sg.min_area_frac < 1 or not 0 <= sg.crop_margin < 1:
         raise ConfigError("segment.min_area_frac harus di (0, 1) dan crop_margin di [0, 1)")
+    if not 0 < sg.obj_min_area_frac < sg.obj_max_area_frac <= 1:
+        raise ConfigError("segment: harus 0 < obj_min_area_frac < obj_max_area_frac <= 1")
+    if not 0 <= sg.obj_min_value <= 255:
+        raise ConfigError("segment.obj_min_value harus 0–255")
 
     if not 0 < cfg.eval.fpr_target < 1 or cfg.eval.cv_folds < 2 or cfg.eval.top_errors < 0:
         raise ConfigError("eval.fpr_target harus di (0, 1), eval.cv_folds >= 2, top_errors >= 0")
+
+
+def _validate_anomaly(p: dict[str, Any]) -> None:
+    """Validasi model.params untuk scorer B (PatchCore-lite)."""
+    if p.get("weights") not in BACKBONE_WEIGHTS:
+        raise ConfigError("model.params.weights harus 'imagenet' atau null")
+    if not isinstance(p.get("image_size"), int) or p["image_size"] < 32:
+        raise ConfigError("model.params.image_size harus int >= 32")
+    _check_choice(p.get("image_score", "max"), IMAGE_SCORES, "model.params.image_score")
+    if not 0 < float(p.get("bank_ratio", 1.0)) <= 1 or int(p.get("bank_max", 1)) < 1:
+        raise ConfigError("model.params.bank_ratio harus di (0, 1] dan bank_max >= 1")
+    if int(p.get("knn", 1)) < 1 or int(p.get("pool", 3)) % 2 == 0:
+        raise ConfigError("model.params.knn harus >= 1 dan pool ganjil")
+    if not 0 < float(p.get("ref_percentile", -1)) <= 100:
+        raise ConfigError("model.params.ref_percentile harus di (0, 100]")
+    if not 0 < float(p.get("topk_frac", 0.01)) <= 1:
+        raise ConfigError("model.params.topk_frac harus di (0, 1]")
 
 
 def from_dict(raw: dict[str, Any]) -> Config:

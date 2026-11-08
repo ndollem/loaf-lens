@@ -1,7 +1,7 @@
-"""CLI training: ``python -m loaflens.train --config configs/baseline.yaml``.
+"""CLI training: ``python -m loaflens.train --config configs/{baseline,anomaly}.yaml``.
 
-Fit hanya pada split ``train`` dari manifest beku. Simpan model + salinan config + contact sheet
-segmentasi (semua gambar manifest) untuk dicek mata.
+Fit hanya pada split ``train`` dari manifest beku, label sesuai ``model.train_labels`` (anomaly:
+normal saja). Simpan model + salinan config + contact sheet segmentasi untuk dicek mata.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import numpy as np
 
 from loaflens.config import Config, load_config
 from loaflens.data import load_image, read_manifest
-from loaflens.score import BaselineScorer
+from loaflens.score import Scorer, model_path, new_scorer
 from loaflens.segment import overlay, segment
 
 log = logging.getLogger(__name__)
@@ -46,22 +46,24 @@ def segment_debug_sheet(cfg: Config, rows: list[dict[str, str]], root: Path, out
     return failures
 
 
-def train(cfg: Config, config_path: Path, root: Path) -> BaselineScorer:
-    """Latih scorer baseline dari split train; simpan artefak ke ``output.dir``."""
-    if cfg.model.type != "baseline":
-        raise SystemExit(f"model.type={cfg.model.type!r} belum didukung (anomaly = M3)")
+def train(cfg: Config, config_path: Path, root: Path) -> Scorer:
+    """Latih scorer (baseline/anomaly) dari split train; simpan artefak ke ``output.dir``."""
     rows = read_manifest(root / cfg.data.manifest)
     train_rows = [r for r in rows if r["split"] == "train" and r["label"] in cfg.model.train_labels]
     images = [load_image(r["path"], root) for r in train_rows]
     labels = [LABEL_TO_Y[r["label"]] for r in train_rows]
     log.info("Train: %d gambar (defect=%d)", len(labels), sum(labels))
 
-    scorer = BaselineScorer.from_config(cfg).fit(images, labels)
+    scorer = new_scorer(cfg).fit(images, labels)
     out_dir = root / cfg.output_dir
-    scorer.save(out_dir / "model.joblib")
+    path = model_path(cfg, root)
+    scorer.save(path)
     shutil.copyfile(config_path, out_dir / "config.yaml")
     log.info(
-        "Model: %s (gagal segmentasi saat train: %d)", out_dir / "model.joblib", scorer.seg_failures
+        "Model: %s (%.1f kB; gagal segmentasi saat train: %d)",
+        path,
+        path.stat().st_size / 1e3,
+        scorer.seg_failures,
     )
 
     failures = segment_debug_sheet(cfg, rows, root, out_dir / "segment_debug.jpg")

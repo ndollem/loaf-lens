@@ -1,6 +1,7 @@
 """Antarmuka scorer + scorer A (baseline): segmentasi → fitur → StandardScaler + classifier.
 
 Skor 0–100, makin tinggi = makin kempes. Baseline: skor = 100 * P(defect).
+Scorer B (anomaly) ada di ``loaflens.anomaly``; ``new_scorer``/``load_scorer`` memilih per config.
 """
 
 from __future__ import annotations
@@ -22,22 +23,60 @@ from sklearn.svm import SVC
 
 from loaflens.config import Config, SegmentConfig
 from loaflens.features import FEATURE_NAMES, extract
-from loaflens.segment import crop, full_frame, segment
+from loaflens.segment import Segmentation, crop, full_frame, segment
 
 log = logging.getLogger(__name__)
 
+MODEL_FILES = {"baseline": "model.joblib", "anomaly": "model.pt"}
+
 
 class Scorer(Protocol):
-    """Antarmuka bersama semua scorer (CLAUDE.md)."""
+    """Antarmuka bersama semua scorer (CLAUDE.md).
+
+    ``seg`` opsional: segmentasi siap pakai (mis. satu roti dari ``segment_all`` di frame konveyor);
+    None = segmentasi roti tunggal terbesar di ``image``. ``represent``/``fit_repr``/``score_repr``
+    dipakai evaluasi agar representasi (fitur/embedding) dihitung sekali untuk cross-validation.
+    """
+
+    seg_failures: int
 
     def fit(self, images: Sequence[np.ndarray], labels: Sequence[int] | None = None) -> Self: ...
 
-    def score(self, image: np.ndarray) -> float: ...
+    def score(self, image: np.ndarray, seg: Segmentation | None = None) -> float: ...
+
+    def represent(self, image: np.ndarray, seg: Segmentation | None = None) -> Any: ...
+
+    def fit_repr(self, reprs: Sequence[Any], y: np.ndarray) -> Self: ...
+
+    def score_repr(self, reprs: Sequence[Any]) -> np.ndarray: ...
 
     def save(self, path: str | Path) -> None: ...
 
     @classmethod
     def load(cls, path: str | Path) -> Self: ...
+
+
+def new_scorer(cfg: Config) -> Scorer:
+    """Scorer baru (belum di-fit) sesuai ``model.type``."""
+    if cfg.model.type == "anomaly":
+        from loaflens.anomaly import AnomalyScorer  # impor torch hanya bila perlu
+
+        return AnomalyScorer.from_config(cfg)
+    return BaselineScorer.from_config(cfg)
+
+
+def model_path(cfg: Config, root: Path) -> Path:
+    """Path file model di ``output.dir`` sesuai ``model.type``."""
+    return root / cfg.output_dir / MODEL_FILES[cfg.model.type]
+
+
+def load_scorer(cfg: Config, root: Path) -> Scorer:
+    """Muat scorer terlatih dari ``output.dir``."""
+    if cfg.model.type == "anomaly":
+        from loaflens.anomaly import AnomalyScorer
+
+        return AnomalyScorer.load(model_path(cfg, root))
+    return BaselineScorer.load(model_path(cfg, root))
 
 
 def make_classifier(params: dict[str, Any], seed: int) -> Pipeline:
@@ -72,9 +111,10 @@ class BaselineScorer:
         """Bangun scorer dari Config (model.params, segment, seed)."""
         return cls(cfg.model.params, cfg.segment, cfg.seed)
 
-    def features(self, image: np.ndarray) -> np.ndarray:
+    def features(self, image: np.ndarray, seg: Segmentation | None = None) -> np.ndarray:
         """Segmentasi → crop ukuran tetap → vektor fitur. Gagal segmentasi = full frame."""
-        seg = segment(image, self.segment_cfg)
+        if seg is None:
+            seg = segment(image, self.segment_cfg)
         if seg is None:
             self.seg_failures += 1
             log.warning("Segmentasi gagal → fallback seluruh gambar (total %d)", self.seg_failures)
@@ -99,9 +139,21 @@ class BaselineScorer:
             raise RuntimeError("scorer belum di-fit / di-load")
         return 100.0 * self.pipeline.predict_proba(np.atleast_2d(x))[:, 1]
 
-    def score(self, image: np.ndarray) -> float:
-        """Skor kempes 0–100 untuk satu gambar BGR."""
-        return float(self.score_features(self.features(image))[0])
+    def score(self, image: np.ndarray, seg: Segmentation | None = None) -> float:
+        """Skor kempes 0–100 untuk satu gambar BGR (opsional segmentasi siap pakai)."""
+        return float(self.score_features(self.features(image, seg))[0])
+
+    def represent(self, image: np.ndarray, seg: Segmentation | None = None) -> np.ndarray:
+        """Representasi untuk CV = vektor fitur."""
+        return self.features(image, seg)
+
+    def fit_repr(self, reprs: Sequence[np.ndarray], y: np.ndarray) -> Self:
+        """Fit dari vektor fitur (normal + kempes)."""
+        return self.fit_features(np.stack(reprs), y)
+
+    def score_repr(self, reprs: Sequence[np.ndarray]) -> np.ndarray:
+        """Skor 0–100 untuk daftar vektor fitur."""
+        return self.score_features(np.stack(reprs))
 
     def save(self, path: str | Path) -> None:
         """Simpan pipeline + nama fitur + snapshot config ke joblib."""

@@ -1,10 +1,11 @@
 """Test segmentasi + crop ukuran tetap (gambar sintetis)."""
 
+import cv2
 import numpy as np
 
-from conftest import synth_loaf
+from conftest import LOAF, synth_loaf
 from loaflens.config import SegmentConfig
-from loaflens.segment import crop, full_frame, segment
+from loaflens.segment import crop, full_frame, segment, segment_all
 
 
 def test_segment_finds_ellipse_bbox() -> None:
@@ -37,3 +38,32 @@ def test_full_frame_fallback_covers_image() -> None:
     img = synth_loaf()
     seg = full_frame(img)
     assert seg.mask.all() and seg.bbox == (0, 0, img.shape[1], img.shape[0])
+
+
+def conveyor_frame() -> np.ndarray:
+    """SYNTHETIC: 4 elips roti di latar gelap + satu terpotong tepi kanan + bintik kecil."""
+    img = np.full((300, 400, 3), 40, np.uint8)
+    for c in [(80, 70), (220, 70), (80, 200), (220, 210)]:
+        cv2.ellipse(img, c, (40, 30), 0, 0, 360, LOAF, thickness=cv2.FILLED)
+    cv2.ellipse(img, (385, 150), (40, 30), 0, 0, 360, LOAF, thickness=cv2.FILLED)  # tepi
+    cv2.circle(img, (220, 70), 12, (230, 230, 230), thickness=cv2.FILLED)  # kilap (S rendah)
+    cv2.circle(img, (300, 270), 3, (0, 220, 255), thickness=cv2.FILLED)  # bintik kecil
+    return img
+
+
+def test_segment_all_finds_ellipses_and_drops_border_object() -> None:
+    img = conveyor_frame()
+    segs = segment_all(img, SegmentConfig())
+    centers = [(x + w // 2, y + h // 2) for x, y, w, h in (s.bbox for s in segs)]
+    assert len(segs) == 4
+    assert centers == sorted(centers, key=lambda c: (c[1] - 30, c[0]))  # urut atas→bawah
+    assert all(abs(w - 81) <= 4 and abs(h - 61) <= 4 for _, _, w, h in (s.bbox for s in segs))
+    assert segs[1].mask[70, 220] == 255  # kilap di tengah roti ikut terisi
+
+    assert len(segment_all(img, SegmentConfig(drop_border=False))) == 5
+
+
+def test_segment_all_respects_roi() -> None:
+    img = conveyor_frame()
+    segs = segment_all(img, SegmentConfig(), roi=[0.0, 0.0, 0.5, 1.0])  # kiri: x < 200
+    assert [s.bbox[0] < 200 for s in segs] == [True, True]

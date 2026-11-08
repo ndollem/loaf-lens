@@ -1,6 +1,8 @@
-"""Segmentasi roti tunggal dari latar polos: saturasi HSV → threshold → morfologi → kontur terbesar.
+"""Segmentasi roti dari latar bersaturasi rendah: saturasi HSV → threshold → morfologi → kontur.
 
-Asumsi POC: satu roti per gambar, latar abu/putih/krem bersaturasi rendah, roti oranye/keemasan.
+``segment``: satu roti per gambar (kontur terbesar; foto dataset). ``segment_all``: banyak roti per
+frame (konveyor; dipakai domain check M3 dan pipeline real-time M4).
+Asumsi POC: latar abu/putih/krem/hitam bersaturasi rendah, roti oranye/keemasan.
 """
 
 from __future__ import annotations
@@ -22,9 +24,16 @@ class Segmentation:
     contour: np.ndarray
 
 
-def segment(image: np.ndarray, cfg: SegmentConfig) -> Segmentation | None:
-    """Isolasi roti terbesar di gambar BGR; None bila tidak ada objek yang cukup besar."""
-    sat = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)[..., 1]
+def binary_mask(image: np.ndarray, cfg: SegmentConfig, min_value: int = 0) -> np.ndarray:
+    """Mask biner (0/255) piksel bersaturasi tinggi setelah blur + open/close morfologi.
+
+    ``min_value`` > 0: piksel sangat gelap (V < min_value) dinolkan dulu — saturasi piksel gelap
+    hanya noise (mis. bayangan kontak di bawah roti pada konveyor gelap).
+    """
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    sat = hsv[..., 1]
+    if min_value > 0:
+        sat = np.where(hsv[..., 2] < min_value, 0, sat).astype(np.uint8)
     sat = cv2.GaussianBlur(sat, (cfg.blur, cfg.blur), 0)
     if cfg.sat_threshold is None:
         _, binary = cv2.threshold(sat, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -32,18 +41,63 @@ def segment(image: np.ndarray, cfg: SegmentConfig) -> Segmentation | None:
         _, binary = cv2.threshold(sat, cfg.sat_threshold, 255, cv2.THRESH_BINARY)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (cfg.morph_kernel, cfg.morph_kernel))
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+def _from_contour(contour: np.ndarray, shape: tuple[int, ...]) -> Segmentation:
+    mask = np.zeros(shape[:2], np.uint8)
+    cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)  # isi lubang
+    return Segmentation(mask=mask, bbox=cv2.boundingRect(contour), contour=contour)
+
+
+def segment(image: np.ndarray, cfg: SegmentConfig) -> Segmentation | None:
+    """Isolasi roti terbesar di gambar BGR; None bila tidak ada objek yang cukup besar."""
+    contours, _ = cv2.findContours(
+        binary_mask(image, cfg), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
     if not contours:
         return None
     contour = max(contours, key=cv2.contourArea)
     if cv2.contourArea(contour) < cfg.min_area_frac * image.shape[0] * image.shape[1]:
         return None
-    mask = np.zeros(image.shape[:2], np.uint8)
-    cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)  # isi lubang
-    x, y, w, h = cv2.boundingRect(contour)
-    return Segmentation(mask=mask, bbox=(x, y, w, h), contour=contour)
+    return _from_contour(contour, image.shape)
+
+
+def roi_rect(shape: tuple[int, ...], roi: list[float] | None) -> tuple[int, int, int, int]:
+    """ROI fraksi [x, y, w, h] → piksel (x0, y0, x1, y1); None = seluruh frame."""
+    h, w = shape[:2]
+    if roi is None:
+        return 0, 0, w, h
+    rx, ry, rw, rh = roi
+    return round(rx * w), round(ry * h), round((rx + rw) * w), round((ry + rh) * h)
+
+
+def segment_all(
+    image: np.ndarray, cfg: SegmentConfig, roi: list[float] | None = None
+) -> list[Segmentation]:
+    """Semua roti di frame BGR (banyak objek), urut atas→bawah lalu kiri→kanan.
+
+    Objek dengan luas di luar [obj_min_area_frac, obj_max_area_frac] (fraksi luas ROI) dibuang;
+    bila ``drop_border``, objek yang menyentuh tepi ROI/frame (roti terpotong) juga dibuang.
+    """
+    x0, y0, x1, y1 = roi_rect(image.shape, roi)
+    binary = binary_mask(image, cfg, cfg.obj_min_value)
+    outside = np.ones(binary.shape, bool)
+    outside[y0:y1, x0:x1] = False
+    binary[outside] = 0
+    area_roi = (x1 - x0) * (y1 - y0)
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    segs = []
+    for c in contours:
+        area = cv2.contourArea(c)
+        if not cfg.obj_min_area_frac * area_roi <= area <= cfg.obj_max_area_frac * area_roi:
+            continue
+        bx, by, bw, bh = cv2.boundingRect(c)
+        touches = bx <= x0 or by <= y0 or bx + bw >= x1 or by + bh >= y1
+        if cfg.drop_border and touches:
+            continue
+        segs.append(_from_contour(c, image.shape))
+    return sorted(segs, key=lambda sg: (sg.bbox[1], sg.bbox[0]))
 
 
 def full_frame(image: np.ndarray) -> Segmentation:

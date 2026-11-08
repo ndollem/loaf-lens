@@ -86,3 +86,22 @@ def test_unknown_and_missing_keys_raise(raw: dict) -> None:
     del raw["threshold"]
     with pytest.raises(ConfigError, match="wajib"):
         from_dict(raw)
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("weights", "imagenet21k"),
+        ("image_size", 16),
+        ("image_score", "mean"),
+        ("knn", 0),
+        ("ref_percentile", 0),
+        ("bank_ratio", 1.5),
+        ("pool", 2),
+    ],
+)
+def test_invalid_anomaly_params_raise(key: str, value: object) -> None:
+    raw = yaml.safe_load((CONFIGS / "anomaly.yaml").read_text(encoding="utf-8"))
+    raw["model"]["params"][key] = value
+    with pytest.raises(ConfigError, match="model.params"):
+        from_dict(raw)

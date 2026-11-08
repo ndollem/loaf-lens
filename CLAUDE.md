@@ -16,7 +16,7 @@ Detail tujuan & requirement: `docs/PRD.md`. Baca itu dulu.
 - Python 3.14 (lihat `.python-version`), `uv` atau `pip` + `requirements.txt` terkunci
 - OpenCV (capture, segmentasi, tracking sederhana)
 - Baseline klasik: scikit-learn (fitur bentuk/warna → SVM/RandomForest/IsolationForest)
-- Anomaly detection: `anomalib` (PatchCore / EfficientAd), export ONNX/OpenVINO bila perlu
+- Anomaly detection: PatchCore-lite sendiri (`src/loaflens/anomaly.py`) di atas `torch` + `torchvision` **CPU** (index CPU PyTorch via `uv --torch-backend cpu`); `anomalib` tidak dipakai (disetujui user, M3). Export ONNX/OpenVINO bila perlu (M5)
 - UI demo: OpenCV window atau Gradio/Streamlit (pilih yang paling ringan)
 - Test: `pytest`; lint: `ruff`
 
@@ -35,18 +35,22 @@ loaf-lens/
 ├── train-data/      # foto dari user, DI-COMMIT atas keputusan user (~6.6 MB)
 │   ├── good-loaf/   # label normal
 │   ├── bad-loaf/    # label defect (kempes)
+│   ├── domain-check/ # foto konveyor asli (semua roti OK) — HANYA domain check, tidak dilatih
 │   └── manifest.csv # split beku (python -m loaflens.data)
 ├── src/loaflens/
 │   ├── config.py    # load + validasi configs/*.yaml
 │   ├── data.py      # scan → manifest + split per grup, loader gambar
 │   ├── audit.py     # laporan audit dataset (outputs/audit.md, docs/audit_m1.md)
 │   ├── capture.py   # sumber: camera / video file
-│   ├── segment.py   # ekstrak roti per frame (ROI, thresholding/background subtraction)
+│   ├── segment.py   # segment (1 roti/foto) + segment_all (banyak roti/frame, ROI, buang tepi)
 │   ├── track.py     # satu roti = satu keputusan (garis keputusan / centroid tracking)
 │   ├── features.py  # fitur bentuk/warna untuk baseline
-│   ├── score.py     # antarmuka scorer: baseline & anomaly
+│   ├── score.py     # antarmuka Scorer + scorer A (baseline) + new_scorer/load_scorer
+│   ├── anomaly.py   # scorer B: PatchCore-lite (ResNet18 beku + memory bank + heatmap)
 │   ├── train.py     # CLI training
-│   ├── evaluate.py  # CLI evaluasi
+│   ├── evaluate.py  # CLI evaluasi (+ --domain-check foto konveyor)
+│   ├── calibrate.py # CLI saran threshold dari CV train+val (F9)
+│   ├── compare.py   # CLI tabel A vs B → docs/results_m3.md
 │   └── app.py       # CLI/UI demo real-time
 ├── tests/
 └── outputs/         # model, laporan, snapshot reject (gitignored)
@@ -79,10 +83,13 @@ make setup | make test | make lint | make format | make lock
 make manifest   # python -m loaflens.data --config configs/baseline.yaml (tidak menimpa; --force = split ulang)
 make audit      # python -m loaflens.audit --config configs/baseline.yaml
 make train      # python -m loaflens.train --config configs/baseline.yaml → outputs/baseline/
-make evaluate   # python -m loaflens.evaluate --config configs/baseline.yaml (+ docs/results_m2.md)
-# belum tersedia (M3–M4):
-python -m loaflens.train --config configs/anomaly.yaml
-python -m loaflens.evaluate --config configs/anomaly.yaml
+make evaluate   # python -m loaflens.evaluate --config configs/baseline.yaml (+ docs/results_m3_baseline.md)
+make train-anomaly     # python -m loaflens.train --config configs/anomaly.yaml → outputs/anomaly/
+make evaluate-anomaly  # python -m loaflens.evaluate --config configs/anomaly.yaml (+ docs/results_m3_anomaly.md)
+make calibrate CONFIG=configs/<x>.yaml     # python -m loaflens.calibrate --config ... → calibration.yaml
+make compare           # python -m loaflens.compare configs/baseline.yaml configs/anomaly.yaml → docs/results_m3.md
+make domain-check CONFIG=configs/<x>.yaml  # python -m loaflens.evaluate --config ... --domain-check <foto>
+# belum tersedia (M4):
 python -m loaflens.app --source video:samples/demo.mp4
 python -m loaflens.app --source camera:0
 ```
