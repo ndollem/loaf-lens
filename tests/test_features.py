@@ -39,3 +39,13 @@ def test_features_invariant_to_image_upscale() -> None:
     rel = np.abs(a - b) / (np.abs(a) + np.abs(b) + 1e-3)
     assert np.median(rel) < 0.05, dict(zip(FEATURE_NAMES, rel.round(3), strict=True))
     assert rel.max() < 0.35, dict(zip(FEATURE_NAMES, rel.round(3), strict=True))
+
+
+def test_features_close_for_200px_vs_60px_bun() -> None:
+    """Resolusi kanonik: roti 200 px vs roti yang sama diperkecil ke 60 px → fitur mirip."""
+    s = scorer()
+    img = synth_loaf(size=(640, 480), center=(320, 240), axes=(100, 70), seed=3)  # lebar 200 px
+    small = cv2.resize(img, None, fx=0.3, fy=0.3, interpolation=cv2.INTER_AREA)  # lebar 60 px
+    a, b = s.features(img), s.features(small)
+    rel = np.abs(a - b) / (np.abs(a) + np.abs(b) + 1e-3)
+    assert np.median(rel) < 0.1, dict(zip(FEATURE_NAMES, rel.round(3), strict=True))

@@ -1,17 +1,21 @@
 """Antarmuka scorer + scorer A (baseline): segmentasi → fitur → StandardScaler + classifier.
 
 Skor 0–100, makin tinggi = makin kempes. Baseline: skor = 100 * P(defect).
+Scorer A tahan resolusi: fitur dari crop kanonik kecil (``crop_size``) + augmentasi resolusi saat
+fit (``model.params.augment``: salinan gambar latih diperkecil ke roti 50–200 px + JPEG).
 Scorer B (anomaly) ada di ``loaflens.anomaly``; ``new_scorer``/``load_scorer`` memilih per config.
 """
 
 from __future__ import annotations
 
 import logging
+import zlib
 from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Protocol, Self
 
+import cv2
 import joblib
 import numpy as np
 from sklearn.calibration import CalibratedClassifierCV
@@ -79,6 +83,16 @@ def load_scorer(cfg: Config, root: Path) -> Scorer:
     return BaselineScorer.load(model_path(cfg, root))
 
 
+def degrade(image: np.ndarray, bun_side: int, bun_px: int, quality: int) -> np.ndarray:
+    """Salinan beresolusi rendah: perkecil (INTER_AREA) agar sisi terpanjang roti ≈ ``bun_px``
+    (tidak diperbesar bila roti sudah lebih kecil), lalu encode/decode JPEG ``quality``."""
+    s = bun_px / max(bun_side, 1)
+    if s < 1:
+        image = cv2.resize(image, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, int(quality)])
+    return cv2.imdecode(buf, cv2.IMREAD_COLOR) if ok else image
+
+
 def make_classifier(params: dict[str, Any], seed: int) -> Pipeline:
     """StandardScaler + classifier sesuai ``model.params.classifier``."""
     name = params["classifier"]
@@ -122,16 +136,45 @@ class BaselineScorer:
         c_img, c_mask = crop(image, seg, self.params["crop_size"], self.segment_cfg.crop_margin)
         return extract(c_img, c_mask, self.params.get("features") or {})
 
+    def augmented_features(self, image: np.ndarray, seg: Segmentation | None = None) -> np.ndarray:
+        """Fitur salinan augmentasi resolusi (k, d); k = 0 bila ``augment`` mati.
+
+        Tiap salinan: roti diperkecil ke sisi ``bun_px`` (log-uniform) + JPEG ``jpeg_quality``,
+        lalu disegmentasi ulang seperti frame kamera beresolusi rendah. RNG = seed config + CRC
+        isi gambar → deterministik dan tidak bergantung urutan gambar.
+        """
+        aug = self.params.get("augment") or {}
+        n = int(aug.get("copies", 0))
+        d = len(self.feature_names)
+        if seg is None:
+            seg = segment(image, self.segment_cfg)
+        if n <= 0 or seg is None:
+            return np.empty((0, d))
+        lo, hi = aug["bun_px"]
+        q_lo, q_hi = aug["jpeg_quality"]
+        rng = np.random.default_rng([self.seed, zlib.crc32(np.ascontiguousarray(image).data)])
+        bun_side = max(seg.bbox[2:])
+        rows = []
+        for _ in range(n):
+            bun_px = round(float(np.exp(rng.uniform(np.log(lo), np.log(hi)))))
+            small = degrade(image, bun_side, bun_px, int(rng.integers(q_lo, q_hi + 1)))
+            small_seg = segment(small, self.segment_cfg)
+            if small_seg is None:  # roti hilang saat diperkecil → salinan dilewati
+                log.debug("Augmentasi: segmentasi gagal pada roti %d px, dilewati", bun_px)
+                continue
+            rows.append(self.features(small, small_seg))
+        return np.stack(rows) if rows else np.empty((0, d))
+
     def fit_features(self, x: np.ndarray, y: Sequence[int]) -> Self:
         """Latih classifier dari matriks fitur (dipakai juga oleh cross-validation)."""
         self.pipeline = make_classifier(self.params, self.seed).fit(x, np.asarray(y))
         return self
 
     def fit(self, images: Sequence[np.ndarray], labels: Sequence[int] | None = None) -> Self:
-        """Latih dari gambar BGR; labels wajib (1 = defect/kempes, 0 = normal)."""
+        """Latih dari gambar BGR (+ salinan augmentasi); labels wajib (1 = kempes, 0 = normal)."""
         if labels is None:
             raise ValueError("BaselineScorer butuh labels (supervised: normal + kempes)")
-        return self.fit_features(np.stack([self.features(im) for im in images]), labels)
+        return self.fit_repr([self.represent(im) for im in images], np.asarray(labels))
 
     def score_features(self, x: np.ndarray) -> np.ndarray:
         """Skor 0–100 untuk matriks fitur (n, d)."""
@@ -144,16 +187,22 @@ class BaselineScorer:
         return float(self.score_features(self.features(image, seg))[0])
 
     def represent(self, image: np.ndarray, seg: Segmentation | None = None) -> np.ndarray:
-        """Representasi untuk CV = vektor fitur."""
-        return self.features(image, seg)
+        """Representasi untuk CV = matriks (1 + k, d): baris 0 fitur gambar asli, sisanya fitur
+        salinan augmentasi (hanya dipakai saat fit; skor selalu dari baris 0)."""
+        if seg is None:
+            seg = segment(image, self.segment_cfg)
+        clean = self.features(image, seg)
+        return np.vstack([clean, self.augmented_features(image, seg)])
 
     def fit_repr(self, reprs: Sequence[np.ndarray], y: np.ndarray) -> Self:
-        """Fit dari vektor fitur (normal + kempes)."""
-        return self.fit_features(np.stack(reprs), y)
+        """Fit dari representasi (asli + salinan augmentasi berlabel sama; normal + kempes)."""
+        mats = [np.atleast_2d(r) for r in reprs]
+        labels = np.concatenate([np.full(len(m), lab) for m, lab in zip(mats, y, strict=True)])
+        return self.fit_features(np.vstack(mats), labels)
 
     def score_repr(self, reprs: Sequence[np.ndarray]) -> np.ndarray:
-        """Skor 0–100 untuk daftar vektor fitur."""
-        return self.score_features(np.stack(reprs))
+        """Skor 0–100 untuk daftar representasi (baris 0 = gambar asli)."""
+        return self.score_features(np.stack([np.atleast_2d(r)[0] for r in reprs]))
 
     def save(self, path: str | Path) -> None:
         """Simpan pipeline + nama fitur + snapshot config ke joblib."""

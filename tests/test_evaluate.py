@@ -3,7 +3,14 @@
 import numpy as np
 import pytest
 
-from loaflens.evaluate import auroc, binary_metrics, prefix_group, recall_at_fpr
+from loaflens.evaluate import (
+    DomainCheck,
+    auroc,
+    binary_metrics,
+    label_counts,
+    prefix_group,
+    recall_at_fpr,
+)
 
 
 def test_recall_at_fpr_hand_made() -> None:
@@ -30,3 +37,15 @@ def test_prefix_group() -> None:
     assert prefix_group("a/medium (3).png", "normal") == "medium-good"
     assert prefix_group("a/medium.png", "defect") == "medium-bad"
     assert prefix_group("a/bad (0).png", "defect") == "bad"
+
+
+def test_label_counts_scaled_and_merged_blob() -> None:
+    # foto diperkecil x0.5: titik kempes (100, 100) & (400, 100) piksel asli → (50, 50) & (200, 50)
+    dc = DomainCheck(
+        "x.webp",
+        scores=[90, 70, 10, 20],
+        bboxes=[(30, 30, 40, 40), (150, 20, 100, 60), (300, 30, 40, 40), (400, 30, 40, 40)],
+        thresholds={"config": 50},
+    )
+    c = label_counts(dc, [[100, 100], [400, 100]], scale=0.5)
+    assert c == {"kempes": 2, "kempes_reject": 2, "ok": 2, "ok_reject": 0}

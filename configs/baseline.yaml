@@ -45,17 +45,24 @@ model:
   type: baseline
   train_labels: [normal, defect]
   params:
-    crop_size: 192            # crop bbox roti → sisi terpanjang = ini px (aspek dijaga, pad)
+    # Resolusi kanonik (2026-11-08): fitur dihitung dari crop KECIL tetap, jadi roti 50–200 px
+    # (video 360p s.d. foto resolusi tinggi) terlihat mirip bagi fitur. Dulu 192 → video gagal,
+    # lihat docs/results_real_video.md. Parameter piksel di `features` diskalakan 64/192 = 1/3.
+    crop_size: 64             # crop bbox roti → sisi terpanjang = ini px (aspek dijaga, pad)
+    augment:                  # augmentasi resolusi saat fit (salinan diperkecil + JPEG); null = mati
+      copies: 4               # salinan per gambar latih (RNG = seed + isi gambar → deterministik)
+      bun_px: [50, 200]       # sisi terpanjang roti di salinan (px), log-uniform; tak diperbesar
+      jpeg_quality: [40, 90]  # kualitas JPEG salinan (uniform), meniru kompresi video
     classifier: logistic_regression   # logistic_regression | random_forest | svm
     classifier_params:        # hyperparameter per classifier (hanya yang dipilih dipakai)
       logistic_regression: {C: 1.0, max_iter: 2000}
       random_forest: {n_estimators: 200, min_samples_leaf: 2}
       svm: {C: 1.0, kernel: rbf}
     features:
-      erode_px: 9             # erosi mask sebelum statistik tekstur (buang tepi latar)
-      texture_blur_sigma: 1.5   # Gaussian sebelum tekstur (0 = mati); redam noise/resampling
+      erode_px: 3             # erosi mask (px pada crop) sebelum statistik tekstur (dulu 9 @192)
+      texture_blur_sigma: 0.5   # Gaussian sebelum tekstur (0 = mati); redam noise (dulu 1.5 @192)
       canny: [50, 150]        # threshold Canny untuk kepadatan tepi (kerutan)
-      crease_px: 6            # radius kernel black-hat (px pada crop) untuk alur lipatan
+      crease_px: 2            # radius kernel black-hat (px pada crop) untuk alur lipatan (dulu 6)
       specular_v: 230         # piksel kilap: V >= ini ...
       specular_s: 60          # ... dan S <= ini (HSV 0–255)
 

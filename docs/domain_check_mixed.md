@@ -36,3 +36,11 @@ Nomor roti mengikuti gambar anotasi, diurutkan dari atas ke bawah.
 - **B tidak bisa dipakai untuk keputusan di domain ini.** Semua skornya di atas threshold karena memory bank berisi roti studio, bukan roti konveyor. Urutan skornya masih ada sinyal (AUROC 0.86), tapi butuh refit memory bank dari roti bagus di kamera konveyor.
 - **Satu foto, 20 roti:** ini indikasi, bukan evaluasi akurasi. Label acuan dari pengamatan visual; status #12 & #19 sudah dikonfirmasi user (OK).
 - Gambar anotasi (tidak di-commit): `outputs/baseline/domain_check.jpg`, `outputs/anomaly/domain_check.jpg`. Untuk membuat ulang: `make domain-check CONFIG=configs/baseline.yaml DOMAIN_IMG=train-data/domain-check/conveyor_mixed_01.webp`.
+
+## Update 2026-11-08: scorer A setelah perbaikan resolusi
+Tabel di atas memakai scorer A lama (crop 192). Dengan scorer A baru (crop kanonik 64 px +
+augmentasi resolusi, [`results_real_video.md`](results_real_video.md#run-2-setelah-perbaikan-resolusi)):
+kempes **5/5** REJECT (skor #1 = 84, #3 = 87, #6 = 99, #17 = 64, #20 = 99), roti OK **0/15** REJECT
+(skor 0–7; borderline #12 = 3, #19 = 7), threshold config 50 maupun saran kalibrasi 40.4. Catatan: foto
+ini ikut dipakai sebagai **data validasi** saat memilih perbaikan itu (juga versi yang diperkecil), jadi
+bukan lagi uji independen.

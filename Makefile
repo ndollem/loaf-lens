@@ -6,6 +6,7 @@ BIN := .venv/bin
 TORCH := --torch-backend cpu
 CONFIG ?= configs/baseline.yaml
 DOMAIN_IMG ?= train-data/domain-check/conveyor_good_01.webp
+DOMAIN_SCALE ?= 1
 APP_CONFIG ?= configs/baseline.yaml
 DEMO_VIDEO ?= samples/demo.mp4
 CAMERA ?= 0
@@ -59,8 +60,8 @@ calibrate:  ## saran threshold dari CV train+val (bukan test) → outputs/<run>/
 compare:  ## tabel A vs B dari metrics.json → outputs/compare.md + docs/results_m3.md
 	$(BIN)/python -m loaflens.compare configs/baseline.yaml configs/anomaly.yaml
 
-domain-check:  ## skor tiap roti di foto konveyor → outputs/<run>/domain_check.jpg
-	$(BIN)/python -m loaflens.evaluate --config $(CONFIG) --domain-check "$(DOMAIN_IMG)"
+domain-check:  ## skor tiap roti di foto konveyor (DOMAIN_SCALE<1 = diperkecil) → outputs/<run>/
+	$(BIN)/python -m loaflens.evaluate --config $(CONFIG) --domain-check "$(DOMAIN_IMG)" --domain-scale $(DOMAIN_SCALE)
 
 demo-video:  ## video demo SYNTHETIC dari foto konveyor → samples/demo.mp4 + demo.gt.json
 	$(BIN)/python -m loaflens.synth --config $(APP_CONFIG) --out $(DEMO_VIDEO)
