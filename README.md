@@ -40,9 +40,10 @@ make demo-live     # sama, dengan jendela OpenCV (butuh display; q/ESC keluar)
 ```
 
 Scorer B dan perbandingan: `make train-anomaly evaluate-anomaly compare`. Kalibrasi threshold:
-`make calibrate CONFIG=configs/baseline.yaml` (tulis `CONFIG=` — default Makefile
-`configs/anomaly.yaml`; config tidak diubah otomatis). Kamera: `make camera CAMERA=0`; langkah demo
-kamera-ke-layar ada di [`docs/USAGE.md` §6.8](docs/USAGE.md#68-kamera--demo-kamera-ke-layar).
+`make calibrate` (default scorer A; scorer B: `CONFIG=configs/anomaly.yaml`; config tidak diubah
+otomatis). Kamera: `make camera CAMERA=0`. Menjalankan di MacBook dengan kamera (termasuk izin
+kamera macOS): [`docs/USAGE.md` §6.8](docs/USAGE.md#68-kamera--demo-kamera-ke-layar). Repo ini tidak
+cocok dideploy ke Vercel/serverless (butuh kamera lokal & proses yang terus berjalan).
 Semua target: [`docs/USAGE.md` §8](docs/USAGE.md#8-referensi-makefile).
 
 ## Catatan instalasi

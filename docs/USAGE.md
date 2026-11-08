@@ -469,7 +469,7 @@ dengan threshold dari config; jangan setel apa pun dari angka test.
 ### 6.2 Kalibrasi threshold
 
 `make evaluate` sudah menulis `calibration.yaml`. Untuk menghitung ulang saja (butuh model terlatih).
-**Selalu tulis `CONFIG=`** — default Makefile adalah `configs/anomaly.yaml`:
+Default `CONFIG` Makefile = `configs/baseline.yaml` (scorer A); untuk scorer B tulis `CONFIG=configs/anomaly.yaml`:
 
 ```bash
 make calibrate CONFIG=configs/baseline.yaml
@@ -522,7 +522,7 @@ make domain-check CONFIG=configs/baseline.yaml
 make domain-check CONFIG=configs/baseline.yaml DOMAIN_IMG=train-data/domain-check/conveyor_mixed_01.webp
 ```
 
-Default `DOMAIN_IMG` = `conveyor_good_01.webp`, default `CONFIG` = `configs/anomaly.yaml`. Output:
+Default `DOMAIN_IMG` = `conveyor_good_01.webp`, default `CONFIG` = `configs/baseline.yaml` (scorer A). Output:
 `outputs/<run>/domain_check.jpg` (kontur + `#nomor skor OK/REJECT`, plus keputusan pada threshold
 kalibrasi bila `calibration.yaml` ada) dan `domain_check.md` (tabel skor). File ini menimpa domain
 check dari `make evaluate`. Foto domain check baru: taruh di `train-data/domain-check/` dengan nama
@@ -575,6 +575,59 @@ total/OK/REJECT; banner merah SYNTHETIC bila sumbernya video sintetis (sidecar `
 video, atau `--synthetic`).
 
 ### 6.8 Kamera & demo kamera-ke-layar
+
+#### Quickstart: MacBook + kamera
+
+Model tidak di-commit, jadi setelah clone wajib `make train` sekali (±10 detik). Torch ikut terpasang
+oleh `make setup` walau scorer A tidak memakainya.
+
+1. Siapkan tool (sekali saja): `xcode-select --install` (untuk `make`/`git`), lalu pasang `uv`
+   (§2).
+2. Clone dan setup:
+
+   ```bash
+   git clone https://github.com/ndollem/loaf-lens.git
+   ```
+
+   ```bash
+   cd loaf-lens
+   ```
+
+   ```bash
+   make setup
+   ```
+
+3. Latih scorer A dan cek hasilnya:
+
+   ```bash
+   make train
+   ```
+
+   ```bash
+   make demo-video
+   ```
+
+   ```bash
+   make demo-live
+   ```
+
+   Jendela demo harus muncul dengan roti bergerak ke bawah; `q`/ESC untuk keluar.
+4. Kamera: jalankan `make camera`. Pada run pertama macOS meminta izin kamera untuk aplikasi
+   terminal (Terminal / iTerm / VS Code). Bila ditolak atau muncul `sumber tidak bisa dibuka:
+   camera:0`, buka **System Settings → Privacy & Security → Camera**, aktifkan untuk aplikasi
+   terminal itu, tutup lalu buka lagi terminalnya. Kamera bawaan MacBook biasanya `CAMERA=0`; iPhone
+   (Continuity Camera) atau webcam USB biasanya `CAMERA=1` atau `2`.
+5. Objek di depan kamera: kamera bawaan MacBook tidak bisa diarahkan ke layarnya sendiri. Pilihan:
+   - putar `samples/demo.mp4` (kirim ke iPhone/iPad lewat AirDrop) atau foto di
+     `train-data/domain-check/` di layar HP/tablet, lalu pegang di depan kamera; atau
+   - roti asli di atas alas gelap polos (segmentasi butuh kontras: roti keemasan vs latar gelap atau
+     abu, lihat `segment.*`).
+6. Sesuaikan `configs/baseline.yaml` dengan gambar kamera: `track.direction` = arah gerak roti di
+   gambar, `track.line_pos` = posisi garis, `camera.roi` bila ada area yang mengganggu. Roti
+   diputuskan hanya saat **melintasi garis kuning**, jadi gerakkan HP/roti melewati garis itu.
+   Roti yang menyentuh tepi frame diabaikan.
+
+#### Kamera-ke-layar (layar lain)
 
 ```bash
 make camera
@@ -736,7 +789,7 @@ roti normal train yang paling aneh", dan margin normal vs kempes B sempit (studi
 ## 8. Referensi Makefile
 
 Diverifikasi dengan `make -n <target>`. Variabel yang bisa di-override: `CONFIG` (default
-`configs/anomaly.yaml`), `DOMAIN_IMG` (default `train-data/domain-check/conveyor_good_01.webp`),
+`configs/baseline.yaml`), `DOMAIN_IMG` (default `train-data/domain-check/conveyor_good_01.webp`),
 `APP_CONFIG` (default `configs/baseline.yaml`), `DEMO_VIDEO` (default `samples/demo.mp4`),
 `CAMERA` (default `0`), `UV` (default `uv`).
 
@@ -865,7 +918,7 @@ hints, fungsi kecil, I/O dipisah dari logika skor, semua parameter di `configs/*
 | `ImportError: libGL.so.1` (Linux minimal) | `opencv-python` (build GUI) butuh library sistem: `sudo apt install libgl1 libglib2.0-0`. |
 | `cv2` aneh / jendela tidak muncul setelah upgrade | `opencv-python-headless` lama masih terpasang; lihat §2 "Upgrade `.venv` lama". |
 | `make setup` gagal mengunduh torch | Host `download.pytorch.org` / `download-r2.pytorch.org` diblokir; buka akses jaringan, atau jalankan dari jaringan lain. |
-| `make calibrate` / `make domain-check` menghasilkan file di `outputs/anomaly/` | Default `CONFIG` Makefile = `configs/anomaly.yaml`; tambahkan `CONFIG=configs/baseline.yaml`. |
+| Bisakah dideploy ke Vercel / serverless? | Tidak cocok. Demo butuh proses yang terus berjalan dan membaca kamera lokal (Vercel hanya fungsi serverless per request, tanpa akses kamera/jendela), paket torch + OpenCV + scikit-learn melebihi batas ukuran fungsi Python Vercel (250 MB), dan prinsip proyek: inferensi lokal di CPU tanpa layanan cloud. Jalankan di laptop / mini PC (§6.8 "MacBook + kamera"). |
 
 ---
 

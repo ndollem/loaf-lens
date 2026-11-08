@@ -88,9 +88,9 @@ make train      # python -m loaflens.train --config configs/baseline.yaml → ou
 make evaluate   # python -m loaflens.evaluate --config configs/baseline.yaml (+ docs/results_m3_baseline.md)
 make train-anomaly     # python -m loaflens.train --config configs/anomaly.yaml → outputs/anomaly/
 make evaluate-anomaly  # python -m loaflens.evaluate --config configs/anomaly.yaml (+ docs/results_m3_anomaly.md)
-make calibrate CONFIG=configs/<x>.yaml     # python -m loaflens.calibrate --config ... → calibration.yaml
+make calibrate [CONFIG=configs/<x>.yaml]   # default baseline; python -m loaflens.calibrate --config ... → calibration.yaml
 make compare           # python -m loaflens.compare configs/baseline.yaml configs/anomaly.yaml → docs/results_m3.md
-make domain-check CONFIG=configs/<x>.yaml  # python -m loaflens.evaluate --config ... --domain-check <foto>
+make domain-check [CONFIG=configs/<x>.yaml] # default baseline; python -m loaflens.evaluate --config ... --domain-check <foto>
 make demo-video        # python -m loaflens.synth --config configs/baseline.yaml --out samples/demo.mp4 (SYNTHETIC + demo.gt.json)
 make demo              # python -m loaflens.app --config configs/baseline.yaml --source video:samples/demo.mp4 --headless --out outputs/demo_out.mp4 --gt samples/demo.gt.json
 make demo-live         # python -m loaflens.app --config configs/baseline.yaml --source video:samples/demo.mp4 (jendela; q/ESC)
