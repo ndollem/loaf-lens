@@ -48,6 +48,12 @@ def test_baseline_uses_normal_and_defect() -> None:
         (("audit", "min_eval_per_class"), 0),
         (("model", "type"), "llm"),
         (("model", "train_labels"), []),
+        (("model", "params", "classifier"), "xgboost"),
+        (("model", "params", "crop_size"), 10),
+        (("segment", "blur"), 4),
+        (("segment", "sat_threshold"), 300),
+        (("eval", "cv_folds"), 1),
+        (("eval", "fpr_target"), 0.0),
     ],
 )
 def test_invalid_values_raise(raw: dict, path: tuple[str, ...], value: object) -> None:
@@ -58,6 +64,12 @@ def test_invalid_values_raise(raw: dict, path: tuple[str, ...], value: object) -
     node[path[-1]] = value
     with pytest.raises(ConfigError):
         from_dict(bad)
+
+
+def test_unknown_segment_key_raises(raw: dict) -> None:
+    raw["segment"]["thresh"] = 10
+    with pytest.raises(ConfigError, match="segment"):
+        from_dict(raw)
 
 
 def test_anomaly_must_train_on_normal_only(raw: dict) -> None:

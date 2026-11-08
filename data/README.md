@@ -23,7 +23,21 @@ spasi/kurung (mis. `bagus (3).png`).
 - Satu roti per foto, foto samping/miring gaya studio dengan latar polos — bukan foto konveyor.
 - **Tidak ada info batch/sesi** → tiap gambar jadi grupnya sendiri (lihat di bawah).
 - Hasil audit lengkap: [`docs/audit_m1.md`](../docs/audit_m1.md) (ukuran gambar beda per kelas =
-  risiko shortcut; arti prefix `medium` di kedua label belum jelas).
+  risiko shortcut).
+
+### Arti prefix nama file (dari user, 2026-11-08)
+
+| Folder | Prefix | Arti | Keputusan |
+|---|---|---|---|
+| `good-loaf/` | `bagus (n)` | jelas layak | terima |
+| `good-loaf/` | `medium (n)` | masih layak walau permukaan tidak sempurna (borderline OK) | terima |
+| `bad-loaf/` | `bad (n)` | kempes parah | reject |
+| `bad-loaf/` | `medium (n)`, `medium.png` | tampak lumayan, tapi permukaan terlalu kempes (borderline reject) | reject |
+
+`bagus (n)`/`medium (n)` dengan nomor sama adalah tingkat kualitas berbeda, **bukan** roti yang sama
+→ split beku tidak diubah. Fokus pembeda: kondisi/tekstur permukaan (kerutan, lipatan, permukaan
+cekung/datar, kilap), bukan sesi/tanggal. Prefix hanya dipakai untuk rincian per kelompok di laporan
+evaluasi (`bagus` / `medium-good` / `bad` / `medium-bad`), tidak sebagai fitur.
 
 ## Menambah foto
 

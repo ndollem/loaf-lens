@@ -23,7 +23,12 @@ camera:
   view: top                   # top | oblique (miring ~45°)
   roi: null                   # [x, y, w, h] fraksi frame 0–1; null = seluruh frame
 
-segment: {}                   # placeholder — diisi di M4
+segment:                      # isolasi roti dari latar polos (kanal saturasi HSV)
+  blur: 5                     # kernel Gaussian (ganjil) sebelum threshold
+  sat_threshold: null         # null = Otsu per gambar; angka 0–255 = threshold tetap
+  morph_kernel: 7             # kernel elips open/close (ganjil)
+  min_area_frac: 0.02         # kontur terbesar < fraksi frame ini = segmentasi gagal
+  crop_margin: 0.05           # margin crop di sekitar bbox (fraksi sisi bbox)
 
 track:
   direction: left_to_right    # left_to_right | right_to_left | top_to_bottom | bottom_to_top
@@ -32,11 +37,27 @@ track:
 model:
   type: baseline
   train_labels: [normal, defect]
-  params:                     # belum dipakai — M2
-    classifier: random_forest
-    n_estimators: 200
+  params:
+    crop_size: 192            # crop bbox roti → sisi terpanjang = ini px (aspek dijaga, pad)
+    classifier: logistic_regression   # logistic_regression | random_forest | svm
+    classifier_params:        # hyperparameter per classifier (hanya yang dipilih dipakai)
+      logistic_regression: {C: 1.0, max_iter: 2000}
+      random_forest: {n_estimators: 200, min_samples_leaf: 2}
+      svm: {C: 1.0, kernel: rbf}
+    features:
+      erode_px: 9             # erosi mask sebelum statistik tekstur (buang tepi latar)
+      texture_blur_sigma: 1.5   # Gaussian sebelum tekstur (0 = mati); redam noise/resampling
+      canny: [50, 150]        # threshold Canny untuk kepadatan tepi (kerutan)
+      crease_px: 6            # radius kernel black-hat (px pada crop) untuk alur lipatan
+      specular_v: 230         # piksel kilap: V >= ini ...
+      specular_s: 60          # ... dan S <= ini (HSV 0–255)
 
 threshold: 50                 # skor 0–100; REJECT jika skor >= threshold (kalibrasi di val, bukan test)
+
+eval:                         # python -m loaflens.evaluate
+  fpr_target: 0.05            # recall dilaporkan pada FPR <= target (kasar: val/test 3–4 normal)
+  cv_folds: 5                 # StratifiedGroupKFold pada train+val (test TIDAK ikut)
+  top_errors: 5               # jumlah kesalahan terbesar per split
 
 output:
   dir: outputs/baseline

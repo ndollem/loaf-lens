@@ -78,8 +78,9 @@ loaf-lens/
 make setup | make test | make lint | make format | make lock
 make manifest   # python -m loaflens.data --config configs/baseline.yaml (tidak menimpa; --force = split ulang)
 make audit      # python -m loaflens.audit --config configs/baseline.yaml
-# belum tersedia (M2–M4):
-python -m loaflens.train --config configs/baseline.yaml
+make train      # python -m loaflens.train --config configs/baseline.yaml → outputs/baseline/
+make evaluate   # python -m loaflens.evaluate --config configs/baseline.yaml (+ docs/results_m2.md)
+# belum tersedia (M3–M4):
 python -m loaflens.train --config configs/anomaly.yaml
 python -m loaflens.evaluate --config configs/anomaly.yaml
 python -m loaflens.app --source video:samples/demo.mp4

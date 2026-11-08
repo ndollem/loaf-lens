@@ -38,12 +38,16 @@ Semua parameter ada di `configs/*.yaml`:
 |---|---|
 | `make manifest` = `python -m loaflens.data --config configs/baseline.yaml` | tersedia (M1); tidak menimpa manifest, `--force` = split ulang |
 | `make audit` = `python -m loaflens.audit --config configs/baseline.yaml` | tersedia (M1); → `outputs/audit.md` + `docs/audit_m1.md` |
-| `python -m loaflens.train --config configs/baseline.yaml` | belum tersedia (M2) |
-| `python -m loaflens.evaluate --config configs/baseline.yaml` | belum tersedia (M2) |
+| `make train` = `python -m loaflens.train --config configs/baseline.yaml` | tersedia (M2); fit dari split `train` → `outputs/baseline/model.joblib` + `segment_debug.jpg` |
+| `make evaluate` = `python -m loaflens.evaluate --config configs/baseline.yaml` | tersedia (M2); val/test + CV train+val → `outputs/baseline/report.md`, `scores.csv`, `roc_test.png` + `docs/results_m2.md` |
 | `python -m loaflens.train --config configs/anomaly.yaml` | belum tersedia (M3) |
 | `python -m loaflens.app --source video:samples/demo.mp4` | belum tersedia (M4) |
 | `python -m loaflens.app --source camera:0` | belum tersedia (M4) |
 
 ## Status
 
-Lihat `docs/PRD.md` §13. Saat ini: **M1** selesai (manifest, split, audit dataset).
+Lihat `docs/PRD.md` §13. Saat ini: **M2** selesai — scorer A (baseline): segmentasi saturasi HSV →
+crop roti ukuran tetap → 25 fitur tekstur/warna/bentuk → logistic regression, skor = 100·P(kempes).
+Hasil (48 foto studio, indikasi kelayakan): [`docs/results_m2.md`](docs/results_m2.md).
+
+Pretrained backbone belum dipakai (M2 hanya numpy/OpenCV/scikit-learn).

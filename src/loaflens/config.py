@@ -18,6 +18,7 @@ MODEL_TYPES = {"baseline", "anomaly"}
 LABELS = {"normal", "defect"}
 SPLIT_KEYS = {"train", "val", "test"}
 SPLIT_BY = {"batch_id"}
+CLASSIFIERS = {"logistic_regression", "random_forest", "svm"}
 
 
 class ConfigError(ValueError):
@@ -59,6 +60,24 @@ class TrackConfig:
 
 
 @dataclass
+class SegmentConfig:
+    """Isolasi roti dari latar polos (kanal saturasi HSV)."""
+
+    blur: int = 5  # kernel Gaussian (ganjil) sebelum threshold
+    sat_threshold: int | None = None  # None = Otsu per gambar; angka 0–255 = tetap
+    morph_kernel: int = 7  # kernel elips open/close (ganjil)
+    min_area_frac: float = 0.02  # kontur terbesar < fraksi ini dari frame = gagal
+    crop_margin: float = 0.05  # margin crop di sekitar bbox, fraksi sisi bbox
+
+
+@dataclass
+class EvalConfig:
+    fpr_target: float = 0.05  # recall dilaporkan pada FPR <= target
+    cv_folds: int = 5  # StratifiedGroupKFold pada train+val (test tidak ikut)
+    top_errors: int = 5  # jumlah kesalahan terbesar yang dilaporkan per split
+
+
+@dataclass
 class ModelConfig:
     type: str
     train_labels: list[str]
@@ -74,8 +93,9 @@ class Config:
     model: ModelConfig
     threshold: float  # skor 0–100; reject jika skor >= threshold
     output_dir: Path
-    segment: dict[str, Any] = field(default_factory=dict)  # placeholder, dipakai di M4
+    segment: SegmentConfig = field(default_factory=SegmentConfig)
     audit: AuditConfig = field(default_factory=AuditConfig)
+    eval: EvalConfig = field(default_factory=EvalConfig)
 
 
 def _section(cls: type, raw: Any, name: str) -> Any:
@@ -140,13 +160,40 @@ def validate(cfg: Config) -> None:
         raise ConfigError(f"model.train_labels harus subset tak kosong dari {sorted(LABELS)}")
     if cfg.model.type == "anomaly" and labels != {"normal"}:
         raise ConfigError("model anomaly hanya boleh dilatih dari 'normal'")
+    if cfg.model.type == "baseline":
+        p = cfg.model.params
+        _check_choice(p.get("classifier"), CLASSIFIERS, "model.params.classifier")
+        if not isinstance(p.get("crop_size"), int) or p["crop_size"] < 32:
+            raise ConfigError("model.params.crop_size harus int >= 32")
+
+    sg = cfg.segment
+    if sg.blur % 2 == 0 or sg.morph_kernel % 2 == 0 or sg.blur < 1 or sg.morph_kernel < 1:
+        raise ConfigError("segment.blur dan segment.morph_kernel harus ganjil >= 1")
+    if sg.sat_threshold is not None and not 0 <= sg.sat_threshold <= 255:
+        raise ConfigError("segment.sat_threshold harus null atau 0–255")
+    if not 0 < sg.min_area_frac < 1 or not 0 <= sg.crop_margin < 1:
+        raise ConfigError("segment.min_area_frac harus di (0, 1) dan crop_margin di [0, 1)")
+
+    if not 0 < cfg.eval.fpr_target < 1 or cfg.eval.cv_folds < 2 or cfg.eval.top_errors < 0:
+        raise ConfigError("eval.fpr_target harus di (0, 1), eval.cv_folds >= 2, top_errors >= 0")
 
 
 def from_dict(raw: dict[str, Any]) -> Config:
     """Bangun Config dari dict hasil YAML lalu validasi."""
     if not isinstance(raw, dict):
         raise ConfigError("isi config harus berupa mapping")
-    known = {"seed", "data", "camera", "segment", "track", "model", "threshold", "output", "audit"}
+    known = {
+        "seed",
+        "data",
+        "camera",
+        "segment",
+        "track",
+        "model",
+        "threshold",
+        "output",
+        "audit",
+        "eval",
+    }
     if unknown := set(raw) - known:
         raise ConfigError(f"kunci tidak dikenal: {sorted(unknown)}")
     try:
@@ -165,8 +212,9 @@ def from_dict(raw: dict[str, Any]) -> Config:
             model=_section(ModelConfig, raw["model"], "model"),
             threshold=float(raw["threshold"]),
             output_dir=Path(raw["output"]["dir"]),
-            segment=raw.get("segment") or {},
+            segment=_section(SegmentConfig, raw.get("segment") or {}, "segment"),
             audit=audit,
+            eval=_section(EvalConfig, raw.get("eval") or {}, "eval"),
         )
     except KeyError as e:
         raise ConfigError(f"kunci wajib hilang: {e}") from e

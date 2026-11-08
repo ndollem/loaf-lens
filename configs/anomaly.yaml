@@ -23,7 +23,12 @@ camera:
   view: top                   # top | oblique (miring ~45°)
   roi: null                   # [x, y, w, h] fraksi frame 0–1; null = seluruh frame
 
-segment: {}                   # placeholder — diisi di M4
+segment:                      # isolasi roti dari latar polos (kanal saturasi HSV)
+  blur: 5                     # kernel Gaussian (ganjil) sebelum threshold
+  sat_threshold: null         # null = Otsu per gambar; angka 0–255 = threshold tetap
+  morph_kernel: 7             # kernel elips open/close (ganjil)
+  min_area_frac: 0.02         # kontur terbesar < fraksi frame ini = segmentasi gagal
+  crop_margin: 0.05           # margin crop di sekitar bbox (fraksi sisi bbox)
 
 track:
   direction: left_to_right    # left_to_right | right_to_left | top_to_bottom | bottom_to_top

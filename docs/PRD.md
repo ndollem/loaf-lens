@@ -23,6 +23,12 @@ Client memiliki lini produksi roti di konveyor. Roti yang kempes harus di-reject
 ## 3. Definisi "kempes" (HARUS dikonfirmasi client)
 Placeholder: roti yang tingginya turun / bagian tengah cekung / bentuk kolaps dibanding roti standar, sehingga di bawah spesifikasi tampilan. Perlu: foto contoh batas (borderline), jumlah jenis roti (SKU), dan siapa yang memberi label ground truth.
 
+**Definisi dari user (2026-11-08), dipakai untuk label `train-data/`:**
+- **Diterima (normal):** `bagus` = jelas layak; `medium` (good-loaf) = masih layak walau permukaan tidak sempurna (cacat permukaan ringan).
+- **Reject (kempes):** `bad` = kempes parah; `medium` (bad-loaf) = tampak lumayan tetapi permukaan terlalu kempes.
+- **Fokus pembeda: kondisi/tekstur permukaan roti** — kerutan, lipatan, permukaan cekung/datar, kilap — bukan sesi/tanggal foto. Nomor sama dengan prefix berbeda = tingkat kualitas berbeda, bukan roti yang sama (split beku dipertahankan).
+- Masih terbuka: definisi client (SKU, siapa pemberi label resmi, contoh borderline dari lini produksi).
+
 ## 4. Pengguna & skenario
 - **Operator QC (target akhir):** melihat roti lewat, melihat tanda OK/REJECT.
 - **Tim POC (kita):** melatih ulang model dari foto baru, menyetel threshold, menjalankan demo.
@@ -117,8 +123,11 @@ Jika target tidak tercapai, laporan harus menjelaskan penyebab (data, sudut kame
 | M5 (opsional) | Uji Raspberry Pi / export ONNX, hook sinyal | Benchmark latency |
 
 ## 13. Status
-- [x] M0  - [x] M1  - [ ] M2  - [ ] M3  - [ ] M4  - [ ] M5
+- [x] M0  - [x] M1  - [x] M2  - [ ] M3  - [ ] M4  - [ ] M5
 
 - 2026-11-08 · M0 selesai: skeleton repo, `configs/{baseline,anomaly}.yaml` + validasi (`src/loaflens/config.py`), Makefile (`setup`/`test`/`lint`), `data/README.md`. Python **3.14** (numpy, opencv-python-headless, scikit-learn, torch, anomalib punya dukungan 3.14). Keputusan: training memakai normal **dan** kempes (scorer A supervised); scorer B tetap normal-only. Kamera `top`/`oblique` dan arah konveyor jadi field config.
 - 2026-11-08 · M1 selesai: `src/loaflens/data.py` (scan → `train-data/manifest.csv`, split beku per grup, `load_split`, `load_image`) dan `src/loaflens/audit.py` (laporan `outputs/audit.md`, salinan [`docs/audit_m1.md`](audit_m1.md)); `make manifest`, `make audit`. Data dari user di `train-data/` (di-commit atas keputusan user): **24 normal + 24 kempes**, satu roti per foto, gaya studio (bukan konveyor). Split 70/15/15 → train 17+17, val 3+3, test 4+4 (normal+defect).
   Temuan audit: (1) **tidak ada info batch** → satu grup per gambar (+ near-duplicate digabung), split per batch belum mungkin; (2) **risiko shortcut**: ukuran gambar memisahkan kelas 100% (normal 312x417, kempes 360x355) — M2 wajib crop segmentasi + resize tetap, tanpa fitur ukuran gambar; statistik warna tepi/tengah hanya memisahkan ~60–70%; (3) prefix `medium` ada di **kedua** label dan pasangan `bagus (n)`/`medium (n)` di normal sangat mirip (kemungkinan varian roti yang sama; 6/12 pasangan beda split) — arti `medium` perlu dikonfirmasi user; (4) val/test sangat kecil (3–4 per label) → metrik sangat noisy, M2 sebaiknya pakai cross-validation per grup. Tidak ada generator data sintetis di M1 (data asli sudah ada; generator video sintetis ditunda ke M4).
+- 2026-11-08 · M2 selesai: scorer A (baseline) — `segment.py` (saturasi HSV + Otsu → kontur terbesar → crop bbox, resize sisi terpanjang 192 px + pad; 0/48 gagal, alas roti pucat kadang terpotong sebagian), `features.py` (25 fitur: tekstur LBP/Laplacian/gradien/Canny/lipatan black-hat setelah blur σ=1.5, warna L\*a\*b\* + fraksi kilap, bentuk bebas skala; tanpa ukuran gambar asli), `score.py` (`Scorer` Protocol, `BaselineScorer` = StandardScaler + logistic regression, skor = 100·P(kempes), joblib), `train.py`, `evaluate.py`; `make train`, `make evaluate`; laporan [`docs/results_m2.md`](results_m2.md).
+  Hasil (48 foto studio — indikasi kelayakan, bukan akurasi produksi): **test AUROC 1.000** (4+4, akurasi 8/8 pada threshold config 50, dievaluasi sekali, tanpa tuning), val AUROC 1.000 (3+3); **CV 5-fold per grup pada train+val: AUROC 0.988 ± 0.025**, akurasi 0.975 ± 0.050 (satu salah: `bagus (10)` skor 84 — roti kusam/pucat dengan sedikit retakan); kelompok borderline `medium-good` rata-rata skor 7, `medium-bad` 91 (CV out-of-fold). **Latency ~4.5 ms/roti** (CPU, segmentasi+fitur+prediksi). Tidak ada fitur tunggal dengan AUROC CV ≥ 0.98 (tertinggi `col_L_std` 0.91).
+  Catatan: (1) hold-out sangat kecil, angka CV lebih bisa dipercaya; (2) model bersandar terutama pada kontras luminans/kilap, warna, LBP, dan aspek roti — fitur kerutan eksplisit lemah sendirian; (3) versi awal tanpa blur memakai tekstur halus yang peka resolusi (arah terbalik dari dugaan) → diganti blur + crop 192 berdasarkan uji resize & CV saja, sebelum test dibuka; (4) foto per folder diambil dengan kondisi berbeda (ukuran, latar, pencahayaan) sehingga angka hampir sempurna bisa sebagian mencerminkan perbedaan pengambilan foto, bukan kempes — uji sebenarnya adalah rekaman kamera/konveyor (M4); (5) threshold belum dikalibrasi (M3).
