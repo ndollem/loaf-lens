@@ -25,7 +25,7 @@ Detail tujuan & requirement: `docs/PRD.md`. Baca itu dulu.
 loaf-lens/
 ├── CLAUDE.md
 ├── README.md
-├── docs/            # PRD.md, KICKOFF_PROMPT.md, catatan eksperimen
+├── docs/            # PRD.md, USAGE.md (panduan pengguna), KICKOFF_PROMPT.md, catatan eksperimen
 ├── configs/         # *.yaml (threshold, ROI, model, source)
 ├── data/            # LIHAT ATURAN DATA di bawah
 │   ├── raw/         # foto asli dari client (gitignored)

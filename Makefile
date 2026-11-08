@@ -72,7 +72,7 @@ demo:  ## app headless pada video demo + banding ground truth → outputs/demo_o
 demo-live:  ## app dengan jendela (q/ESC keluar) pada video demo
 	$(BIN)/python -m loaflens.app --config $(APP_CONFIG) --source video:$(DEMO_VIDEO)
 
-camera:  ## app dengan jendela dari kamera (CAMERA=0); demo kamera-ke-layar, lihat README
+camera:  ## app dengan jendela dari kamera (CAMERA=0); demo kamera-ke-layar, lihat docs/USAGE.md
 	$(BIN)/python -m loaflens.app --config $(APP_CONFIG) --source camera:$(CAMERA)
 
 clean:

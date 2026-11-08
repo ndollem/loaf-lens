@@ -22,8 +22,11 @@ Foto konveyor asli dari user untuk **cek domain saja — tidak pernah dipakai un
 atau tuning** (folder ini di luar `data.normal_dir`/`data.defect_dir`, tidak masuk manifest).
 `conveyor_good_01.webp` (941x1672): belt mesh abu gelap tampak atas/miring, ±19 roti bulat mengilap,
 **semua layak**. `segment_all` + scorer menilai tiap roti; karena semua OK, setiap REJECT = false
-positive (`eval.domain_check` di config; `make domain-check`). Tambahkan foto lain dengan nama yang
-menjelaskan isinya (mis. `conveyor_mixed_01.jpg`) dan catat labelnya di sini.
+positive (`eval.domain_check` di config; `make domain-check`). `conveyor_mixed_01.webp`: konveyor yang sama, 20 roti terdeteksi = **5 kempes** (#1, #3, #6, #17,
+#20) + 15 OK (termasuk borderline #12/#19, dikonfirmasi user OK); label posisi di `labels.json`,
+hasil di [`docs/domain_check_mixed.md`](../docs/domain_check_mixed.md). `labels.json` juga dipakai
+sebagai ground truth video demo SYNTHETIC (`make demo-video`). Tambahkan foto lain dengan nama yang
+menjelaskan isinya dan catat labelnya di sini (dan di `labels.json`).
 
 ## Isi saat ini (M1, 2026-11-08)
 
