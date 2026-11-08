@@ -4,7 +4,7 @@ PY  := $(shell cat .python-version)
 BIN := .venv/bin
 # torch/torchvision dari index CPU PyTorch (Linux: wheel +cpu tanpa paket CUDA; macOS: wheel biasa)
 TORCH := --torch-backend cpu
-CONFIG ?= configs/anomaly.yaml
+CONFIG ?= configs/baseline.yaml
 DOMAIN_IMG ?= train-data/domain-check/conveyor_good_01.webp
 APP_CONFIG ?= configs/baseline.yaml
 DEMO_VIDEO ?= samples/demo.mp4
