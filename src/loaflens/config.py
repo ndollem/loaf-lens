@@ -58,7 +58,24 @@ class CameraConfig:
 @dataclass
 class TrackConfig:
     direction: str = "left_to_right"
-    line_pos: float = 0.5  # posisi garis keputusan, fraksi frame searah gerak
+    line_pos: float = 0.5  # posisi garis keputusan, fraksi frame searah gerak (dari tepi masuk)
+    max_distance: float = 0.08  # jarak maks prediksi→deteksi, fraksi sisi terpanjang frame
+    max_missed: int = 5  # track dihapus setelah sekian frame berturut-turut tanpa deteksi
+
+
+@dataclass
+class AppConfig:
+    """Demo real-time (``python -m loaflens.app``)."""
+
+    window_name: str = "LoafLens"
+    out_fps: float | None = None  # fps video --out; None = fps sumber
+    snapshot_dir: Path = Path("outputs/rejects")
+    rejects_csv: Path = Path("outputs/rejects/rejects.csv")
+    decisions_csv: Path = Path("outputs/app/decisions.csv")
+    snapshot_margin: float = 0.15  # margin crop snapshot, fraksi sisi bbox
+    synthetic_banner: str = "SYNTHETIC - bukan untuk evaluasi akurasi"
+    gt_match_dist: float = 0.05  # --gt: jarak maks keputusan→roti GT, fraksi sisi terpanjang
+    gt_report: Path = Path("outputs/app/gt_compare.md")
 
 
 @dataclass
@@ -106,6 +123,7 @@ class Config:
     segment: SegmentConfig = field(default_factory=SegmentConfig)
     audit: AuditConfig = field(default_factory=AuditConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
+    app: AppConfig = field(default_factory=AppConfig)
 
 
 def _section(cls: type, raw: Any, name: str) -> Any:
@@ -163,6 +181,14 @@ def validate(cfg: Config) -> None:
     _check_choice(cfg.track.direction, DIRECTIONS, "track.direction")
     if not 0 < cfg.track.line_pos < 1:
         raise ConfigError(f"track.line_pos={cfg.track.line_pos} harus di (0, 1)")
+    if not 0 < cfg.track.max_distance <= 1 or cfg.track.max_missed < 0:
+        raise ConfigError("track.max_distance harus di (0, 1] dan track.max_missed >= 0")
+
+    ap = cfg.app
+    if ap.out_fps is not None and ap.out_fps <= 0:
+        raise ConfigError("app.out_fps harus null atau > 0")
+    if not 0 <= ap.snapshot_margin < 1 or not 0 < ap.gt_match_dist <= 1:
+        raise ConfigError("app.snapshot_margin harus di [0, 1) dan app.gt_match_dist di (0, 1]")
 
     _check_choice(cfg.model.type, MODEL_TYPES, "model.type")
     labels = set(cfg.model.train_labels)
@@ -211,6 +237,13 @@ def _validate_anomaly(p: dict[str, Any]) -> None:
         raise ConfigError("model.params.topk_frac harus di (0, 1]")
 
 
+def _app_section(raw: Any) -> AppConfig:
+    app = _section(AppConfig, raw, "app")
+    for name in ("snapshot_dir", "rejects_csv", "decisions_csv", "gt_report"):
+        setattr(app, name, Path(getattr(app, name)))
+    return app
+
+
 def from_dict(raw: dict[str, Any]) -> Config:
     """Bangun Config dari dict hasil YAML lalu validasi."""
     if not isinstance(raw, dict):
@@ -226,6 +259,7 @@ def from_dict(raw: dict[str, Any]) -> Config:
         "output",
         "audit",
         "eval",
+        "app",
     }
     if unknown := set(raw) - known:
         raise ConfigError(f"kunci tidak dikenal: {sorted(unknown)}")
@@ -248,6 +282,7 @@ def from_dict(raw: dict[str, Any]) -> Config:
             segment=_section(SegmentConfig, raw.get("segment") or {}, "segment"),
             audit=audit,
             eval=_section(EvalConfig, raw.get("eval") or {}, "eval"),
+            app=_app_section(raw.get("app") or {}),
         )
     except KeyError as e:
         raise ConfigError(f"kunci wajib hilang: {e}") from e

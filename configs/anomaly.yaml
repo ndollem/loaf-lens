@@ -35,9 +35,11 @@ segment:                      # isolasi roti dari latar polos (kanal saturasi HS
   drop_border: true           # buang roti yang menyentuh tepi ROI/frame (terpotong)
   obj_min_value: 40           # V < ini dinolkan (bayangan kontak gelap di konveyor)
 
-track:
-  direction: left_to_right    # left_to_right | right_to_left | top_to_bottom | bottom_to_top
-  line_pos: 0.5               # garis keputusan, fraksi frame searah gerak konveyor
+track:                        # satu roti = satu keputusan (M4, src/loaflens/track.py)
+  direction: top_to_bottom    # left_to_right | right_to_left | top_to_bottom | bottom_to_top
+  line_pos: 0.5               # garis keputusan, fraksi frame searah gerak (dari tepi masuk)
+  max_distance: 0.08          # jarak maks centroid prediksi→deteksi, fraksi sisi terpanjang frame
+  max_missed: 5               # track dihapus setelah sekian frame berturut-turut tanpa deteksi
 
 model:
   type: anomaly

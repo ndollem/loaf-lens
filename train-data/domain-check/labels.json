@@ -1,0 +1,13 @@
+{
+  "_note": "Label acuan per roti (posisi titik tengah bbox, piksel foto asli), dipakai ground truth video demo SYNTHETIC (loaflens.synth). Sumber: docs/domain_check_mixed.md. Roti tanpa entri = OK; foto tanpa entri = label tidak diketahui.",
+  "conveyor_mixed_01.webp": {
+    "defect": [[586, 80], [298, 274], [630, 470], [689, 1269], [242, 1526]],
+    "borderline_ok": [[448, 913], [734, 1461]],
+    "source": "kempes = #1, #3, #6, #17, #20 (label visual); #12, #19 lekukan kecil, dikonfirmasi user OK"
+  },
+  "conveyor_good_01.webp": {
+    "defect": [],
+    "borderline_ok": [],
+    "source": "semua roti OK (M3 domain check)"
+  }
+}

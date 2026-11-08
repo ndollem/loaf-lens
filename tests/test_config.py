@@ -54,6 +54,10 @@ def test_baseline_uses_normal_and_defect() -> None:
         (("segment", "sat_threshold"), 300),
         (("eval", "cv_folds"), 1),
         (("eval", "fpr_target"), 0.0),
+        (("track", "max_distance"), 0.0),
+        (("track", "max_missed"), -1),
+        (("app", "out_fps"), 0),
+        (("app", "gt_match_dist"), 0.0),
     ],
 )
 def test_invalid_values_raise(raw: dict, path: tuple[str, ...], value: object) -> None:
@@ -69,6 +73,16 @@ def test_invalid_values_raise(raw: dict, path: tuple[str, ...], value: object) -
 def test_unknown_segment_key_raises(raw: dict) -> None:
     raw["segment"]["thresh"] = 10
     with pytest.raises(ConfigError, match="segment"):
+        from_dict(raw)
+
+
+def test_app_section_optional_and_paths(raw: dict) -> None:
+    cfg = from_dict(raw)
+    assert cfg.app.rejects_csv == Path("outputs/rejects/rejects.csv")
+    del raw["app"]
+    assert from_dict(raw).app.snapshot_dir == Path("outputs/rejects")  # default
+    raw["app"] = {"snapshot": "x"}
+    with pytest.raises(ConfigError, match="app"):
         from_dict(raw)
 
 

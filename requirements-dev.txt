@@ -23,11 +23,11 @@ networkx==3.7
 numpy==2.5.4
     # via
     #   loaflens (pyproject.toml)
-    #   opencv-python-headless
+    #   opencv-python
     #   scikit-learn
     #   scipy
     #   torchvision
-opencv-python-headless==5.0.0.93
+opencv-python==5.0.0.93
     # via loaflens (pyproject.toml)
 packaging==26.3
     # via pytest

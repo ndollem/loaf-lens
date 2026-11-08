@@ -18,6 +18,12 @@ make format  # perbaiki format otomatis
 make lock    # perbarui requirements*.txt setelah mengubah pyproject.toml
 ```
 
+**OpenCV:** sejak M4 dependency-nya `opencv-python` (build dengan GUI untuk jendela demo
+`cv2.imshow`), menggantikan `opencv-python-headless`. Keduanya memakai modul `cv2` yang sama dan
+bentrok bila terpasang bersamaan. `.venv` lama (sebelum M4): jalankan
+`uv pip uninstall --python .venv/bin/python opencv-python-headless` lalu `make setup`.
+Di Linux tanpa display, pakai `--headless`.
+
 ### PyTorch (CPU-only) untuk scorer B
 
 Scorer B memakai `torch` + `torchvision` (bukan anomalib). Di Linux, `torch` dari PyPI menarik paket
@@ -77,18 +83,79 @@ seaneh roti normal train yang paling aneh**; di atas 50 = di luar variasi normal
 | `make calibrate [CONFIG=...]` = `python -m loaflens.calibrate --config configs/<x>.yaml` | M3; saran threshold dari CV train+val (bukan test) → `outputs/<run>/calibration.yaml` (config tidak diubah) |
 | `make compare` = `python -m loaflens.compare configs/baseline.yaml configs/anomaly.yaml` | M3; tabel A vs B dari `metrics.json` → `outputs/compare.md` + `docs/results_m3.md` |
 | `make domain-check [CONFIG=...]` = `python -m loaflens.evaluate --config configs/<x>.yaml --domain-check <foto>` | M3; skor tiap roti di foto konveyor → `outputs/<run>/domain_check.jpg` |
-| `python -m loaflens.app --source video:samples/demo.mp4` | belum tersedia (M4) |
-| `python -m loaflens.app --source camera:0` | belum tersedia (M4) |
+| `make demo-video` = `python -m loaflens.synth --config configs/baseline.yaml --out samples/demo.mp4` | M4; video demo **SYNTHETIC** dari foto konveyor + ground truth `samples/demo.gt.json` |
+| `make demo` = `python -m loaflens.app --config configs/baseline.yaml --source video:samples/demo.mp4 --headless --out outputs/demo_out.mp4 --gt samples/demo.gt.json` | M4; tanpa jendela, video beranotasi + banding ground truth → `outputs/app/gt_compare.md` |
+| `make demo-live` = `python -m loaflens.app --config configs/baseline.yaml --source video:samples/demo.mp4` | M4; jendela OpenCV (`q`/ESC keluar), tempo = fps video |
+| `make camera [CAMERA=0]` = `python -m loaflens.app --config configs/baseline.yaml --source camera:0` | M4; kamera langsung (demo kamera-ke-layar, lihat di bawah) |
 
 Urutan lengkap M3: `make train train-anomaly evaluate evaluate-anomaly compare` (`evaluate` sudah
 menjalankan kalibrasi + domain check; `calibrate`/`domain-check` untuk dijalankan terpisah).
 
+## Demo real-time (M4)
+
+Pipeline: `capture → segment_all (ROI) → track (garis keputusan) → skor scorer A → threshold → overlay/log`.
+Demo memakai **scorer A** (`configs/baseline.yaml`, model `outputs/baseline/model.joblib` dari
+`make train`); scorer B gagal di domain konveyor (lihat `docs/results_m3.md`).
+
+```bash
+make train        # sekali, bila outputs/baseline/model.joblib belum ada
+make demo-video   # samples/demo.mp4 + samples/demo.gt.json (SYNTHETIC, tidak di-commit)
+make demo         # headless + banding ground truth → outputs/demo_out.mp4, outputs/app/gt_compare.md
+make demo-live    # sama, dengan jendela (butuh display; OpenCV build GUI `opencv-python`)
+```
+
+Opsi app: `--source video:<path>|camera:<id>`, `--headless`, `--out <video>`, `--max-frames N`,
+`--gt <sidecar.gt.json>`, `--synthetic` (paksa banner). Semua parameter lain di config:
+`track.*` (arah, `line_pos`, `max_distance`, `max_missed`), `camera.roi`, `threshold`, `app.*`.
+
+- **Satu roti = satu keputusan:** roti dilacak (centroid, tetangga terdekat) dan diputuskan sekali saat
+  titik tengahnya melewati garis keputusan kuning searah `track.direction`; skor dari segmentasi
+  frame itu.
+- **Overlay:** kotak abu = belum diputuskan, hijau = OK, merah = REJECT (+ id, skor); FPS dan counter
+  total/OK/REJECT; banner merah "SYNTHETIC - bukan untuk evaluasi akurasi" bila sumbernya video
+  sintetis (sidecar `.gt.json` ditemukan, atau `--synthetic`).
+- **Output:** tiap REJECT → crop + frame beranotasi di `outputs/rejects/` dan satu baris di
+  `outputs/rejects/rejects.csv` (ditambahkan antar run); semua keputusan run → `outputs/app/decisions.csv`;
+  satu baris log `DECISION id=.. frame=.. score=.. OK|REJECT` per roti (hook sinyal sederhana, belum
+  serial/PLC); ringkasan FPS & latency di akhir.
+
+### Video demo SYNTHETIC
+
+`make demo-video` menumpuk foto `train-data/domain-check/conveyor_mixed_01.webp` (5 roti kempes +
+15 OK) lalu `conveyor_good_01.webp` (15 OK), diulang 2x, dan menggeser jendela 941x900 px sehingga
+roti bergerak ke bawah 8 px/frame @ 30 fps. Roti terpotong di sambungan foto ditutup warna konveyor.
+Ground truth (`samples/demo.gt.json`) berisi posisi tiap roti per frame dan label acuan dari
+`train-data/domain-check/labels.json`. **SYNTHETIC — bukan untuk evaluasi akurasi:** ini scroll foto
+diam (tanpa motion blur, perubahan cahaya, atau efek kamera); hanya menguji pipeline & penghitungan.
+`samples/` tidak di-commit — buat ulang kapan saja dengan `make demo-video` (opsi `--speed`, `--fps`,
+`--height`, `--direction`, `--repeat`, `--images`). Hasil: [`docs/results_m4.md`](docs/results_m4.md).
+
+### Demo kamera-ke-layar (belum diuji di repo ini)
+
+1. Putar `samples/demo.mp4` **layar penuh** di device lain (laptop/tablet/TV), kecerahan layar tinggi.
+2. Arahkan kamera tegak lurus ke layar, seluruh area konveyor terlihat; kunci fokus bila bisa.
+3. Sesuaikan config: `camera.roi` = area layar di frame kamera (fraksi `[x, y, w, h]`; buang bingkai
+   layar & tepi ruangan), `track.direction` = arah gerak roti **di gambar kamera** (bila kamera
+   diputar, arahnya ikut berputar), `track.line_pos` di tengah area gerak. Bila roti di kamera tampak
+   jauh lebih kecil/besar, periksa `segment.obj_min_area_frac`/`obj_max_area_frac` (fraksi luas ROI).
+4. Jalankan `make camera` (atau `CAMERA=1`), pantau overlay; `q`/ESC untuk berhenti. Tambah
+   `--out outputs/camera_out.mp4` untuk merekam hasil, `--synthetic` agar banner tetap tampil.
+5. Tips: matikan auto-exposure/auto white balance bila kamera mendukung, hindari pantulan lampu di
+   layar; **moiré** berkurang dengan sedikit memiringkan kamera, menjauhkan kamera + zoom, atau
+   sedikit defocus; refresh rate layar bisa menimbulkan garis/flicker — coba exposure lebih lama.
+6. Sesuai PRD §9: jalankan **≥ 5 menit** stabil (video diputar berulang) dan laporkan hasil kamera
+   **terpisah** dari uji file video (`make demo`): jumlah keputusan vs roti yang lewat, duplikat,
+   kempes tertangkap, OK ikut ter-reject. Ground truth `--gt` hanya berlaku untuk file video, bukan
+   kamera (posisi/waktu berbeda).
+
 ## Status
 
-Lihat `docs/PRD.md` §13. Saat ini: **M3** selesai — scorer B (PatchCore-lite) + kalibrasi threshold +
-perbandingan A vs B + domain check foto konveyor: [`docs/results_m3.md`](docs/results_m3.md)
-(rinci: [`results_m3_baseline.md`](docs/results_m3_baseline.md),
+Lihat `docs/PRD.md` §13. Saat ini: **M4** selesai untuk uji file video — pipeline real-time
+(capture/segment/track/score/overlay, snapshot REJECT) pada video demo SYNTHETIC: 70/70 roti
+diputuskan tepat sekali (miscount 0%), kempes 5/5 per putaran, roti OK ter-reject 0/30
+([`docs/results_m4.md`](docs/results_m4.md)). Demo kamera-ke-layar masih harus dijalankan user.
+M3: scorer B (PatchCore-lite) + kalibrasi threshold + perbandingan A vs B + domain check foto konveyor:
+[`docs/results_m3.md`](docs/results_m3.md) (rinci: [`results_m3_baseline.md`](docs/results_m3_baseline.md),
 [`results_m3_anomaly.md`](docs/results_m3_anomaly.md); snapshot M2: [`results_m2.md`](docs/results_m2.md)).
-Ringkas: di 48 foto studio keduanya memisahkan kelas hampir sempurna (CV AUROC A 0.988, B 1.000),
-tetapi pada foto konveyor asli (15 roti bagus) A menolak 0 dan B menolak 5–11 → untuk demo M4 A
-dipakai sebagai keputusan utama, B butuh memory bank dari kamera konveyor.
+Di 48 foto studio kedua scorer memisahkan kelas hampir sempurna (CV AUROC A 0.988, B 1.000), tetapi di
+foto konveyor A jauh lebih stabil → A dipakai untuk demo M4, B butuh memory bank dari kamera konveyor.

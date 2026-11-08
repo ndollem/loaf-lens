@@ -6,9 +6,12 @@ BIN := .venv/bin
 TORCH := --torch-backend cpu
 CONFIG ?= configs/anomaly.yaml
 DOMAIN_IMG ?= train-data/domain-check/conveyor_good_01.webp
+APP_CONFIG ?= configs/baseline.yaml
+DEMO_VIDEO ?= samples/demo.mp4
+CAMERA ?= 0
 
 .PHONY: setup lock test lint format manifest audit train evaluate train-anomaly \
-	evaluate-anomaly calibrate compare domain-check clean
+	evaluate-anomaly calibrate compare domain-check demo-video demo demo-live camera clean
 
 setup:  ## buat .venv + pasang dependency terkunci + paket editable
 	$(UV) venv --python $(PY) .venv
@@ -58,6 +61,19 @@ compare:  ## tabel A vs B dari metrics.json → outputs/compare.md + docs/result
 
 domain-check:  ## skor tiap roti di foto konveyor → outputs/<run>/domain_check.jpg
 	$(BIN)/python -m loaflens.evaluate --config $(CONFIG) --domain-check "$(DOMAIN_IMG)"
+
+demo-video:  ## video demo SYNTHETIC dari foto konveyor → samples/demo.mp4 + demo.gt.json
+	$(BIN)/python -m loaflens.synth --config $(APP_CONFIG) --out $(DEMO_VIDEO)
+
+demo:  ## app headless pada video demo + banding ground truth → outputs/demo_out.mp4, outputs/app/
+	$(BIN)/python -m loaflens.app --config $(APP_CONFIG) --source video:$(DEMO_VIDEO) --headless \
+		--out outputs/demo_out.mp4 --gt $(DEMO_VIDEO:.mp4=.gt.json)
+
+demo-live:  ## app dengan jendela (q/ESC keluar) pada video demo
+	$(BIN)/python -m loaflens.app --config $(APP_CONFIG) --source video:$(DEMO_VIDEO)
+
+camera:  ## app dengan jendela dari kamera (CAMERA=0); demo kamera-ke-layar, lihat README
+	$(BIN)/python -m loaflens.app --config $(APP_CONFIG) --source camera:$(CAMERA)
 
 clean:
 	rm -rf .venv .pytest_cache .ruff_cache

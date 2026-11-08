@@ -6,9 +6,9 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "numpy",
-    # Headless: tanpa jendela GUI (cv2.imshow). M4 (UI demo) mungkin butuh `opencv-python`;
-    # diputuskan nanti. Jangan pasang keduanya bersamaan.
-    "opencv-python-headless",
+    # Build dengan GUI (cv2.imshow) untuk demo real-time M4 (keputusan user, ganti dari
+    # opencv-python-headless). Jangan pasang keduanya bersamaan (bentrok modul cv2).
+    "opencv-python",
     "scikit-learn",
     "pyyaml",
     # Scorer B (M3): backbone ResNet18 beku sebagai feature extractor. Wajib build CPU —

@@ -35,9 +35,11 @@ segment:                      # isolasi roti dari latar polos (kanal saturasi HS
   drop_border: true           # buang roti yang menyentuh tepi ROI/frame (terpotong)
   obj_min_value: 40           # V < ini dinolkan (bayangan kontak gelap di konveyor)
 
-track:
-  direction: left_to_right    # left_to_right | right_to_left | top_to_bottom | bottom_to_top
-  line_pos: 0.5               # garis keputusan, fraksi frame searah gerak konveyor
+track:                        # satu roti = satu keputusan (M4, src/loaflens/track.py)
+  direction: top_to_bottom    # left_to_right | right_to_left | top_to_bottom | bottom_to_top
+  line_pos: 0.5               # garis keputusan, fraksi frame searah gerak (dari tepi masuk)
+  max_distance: 0.08          # jarak maks centroid prediksi→deteksi, fraksi sisi terpanjang frame
+  max_missed: 5               # track dihapus setelah sekian frame berturut-turut tanpa deteksi
 
 model:
   type: baseline
@@ -65,6 +67,17 @@ eval:                         # python -m loaflens.evaluate / calibrate
   top_errors: 5               # jumlah kesalahan terbesar per split
   docs_copy: docs/results_m3_baseline.md   # docs/results_m2.md = snapshot M2 (dibekukan)
   domain_check: [train-data/domain-check/conveyor_good_01.webp]   # semua roti OK; tidak dilatih
+
+app:                          # python -m loaflens.app (M4: demo real-time)
+  window_name: LoafLens
+  out_fps: null               # fps video --out; null = fps sumber (kamera tanpa fps → 30)
+  snapshot_dir: outputs/rejects            # F8: crop + frame beranotasi tiap REJECT
+  rejects_csv: outputs/rejects/rejects.csv # F8: ditambah (append) tiap REJECT
+  decisions_csv: outputs/app/decisions.csv # semua keputusan satu run (ditimpa per run)
+  snapshot_margin: 0.15       # margin crop snapshot, fraksi sisi bbox
+  synthetic_banner: "SYNTHETIC - bukan untuk evaluasi akurasi"   # ASCII (putText OpenCV)
+  gt_match_dist: 0.05         # --gt: jarak maks keputusan→roti ground truth, fraksi sisi terpanjang
+  gt_report: outputs/app/gt_compare.md     # --gt: laporan perbandingan
 
 output:
   dir: outputs/baseline

@@ -17,7 +17,7 @@ Detail tujuan & requirement: `docs/PRD.md`. Baca itu dulu.
 - OpenCV (capture, segmentasi, tracking sederhana)
 - Baseline klasik: scikit-learn (fitur bentuk/warna → SVM/RandomForest/IsolationForest)
 - Anomaly detection: PatchCore-lite sendiri (`src/loaflens/anomaly.py`) di atas `torch` + `torchvision` **CPU** (index CPU PyTorch via `uv --torch-backend cpu`); `anomalib` tidak dipakai (disetujui user, M3). Export ONNX/OpenVINO bila perlu (M5)
-- UI demo: OpenCV window atau Gradio/Streamlit (pilih yang paling ringan)
+- UI demo: jendela OpenCV (`opencv-python`, build GUI; bukan `-headless`), `--headless` tanpa display
 - Test: `pytest`; lint: `ruff`
 
 ## Struktur repo
@@ -35,7 +35,7 @@ loaf-lens/
 ├── train-data/      # foto dari user, DI-COMMIT atas keputusan user (~6.6 MB)
 │   ├── good-loaf/   # label normal
 │   ├── bad-loaf/    # label defect (kempes)
-│   ├── domain-check/ # foto konveyor asli (semua roti OK) — HANYA domain check, tidak dilatih
+│   ├── domain-check/ # foto konveyor asli (+ labels.json posisi roti kempes) — HANYA domain check/demo, tidak dilatih
 │   └── manifest.csv # split beku (python -m loaflens.data)
 ├── src/loaflens/
 │   ├── config.py    # load + validasi configs/*.yaml
@@ -51,8 +51,10 @@ loaf-lens/
 │   ├── evaluate.py  # CLI evaluasi (+ --domain-check foto konveyor)
 │   ├── calibrate.py # CLI saran threshold dari CV train+val (F9)
 │   ├── compare.py   # CLI tabel A vs B → docs/results_m3.md
-│   └── app.py       # CLI/UI demo real-time
+│   ├── synth.py     # CLI video demo SYNTHETIC dari foto konveyor + ground truth (M4)
+│   └── app.py       # CLI/UI demo real-time (+ --gt banding ground truth)
 ├── tests/
+├── samples/         # video demo (gitignored; buat ulang: make demo-video)
 └── outputs/         # model, laporan, snapshot reject (gitignored)
 ```
 
@@ -89,7 +91,8 @@ make evaluate-anomaly  # python -m loaflens.evaluate --config configs/anomaly.ya
 make calibrate CONFIG=configs/<x>.yaml     # python -m loaflens.calibrate --config ... → calibration.yaml
 make compare           # python -m loaflens.compare configs/baseline.yaml configs/anomaly.yaml → docs/results_m3.md
 make domain-check CONFIG=configs/<x>.yaml  # python -m loaflens.evaluate --config ... --domain-check <foto>
-# belum tersedia (M4):
-python -m loaflens.app --source video:samples/demo.mp4
-python -m loaflens.app --source camera:0
+make demo-video        # python -m loaflens.synth --config configs/baseline.yaml --out samples/demo.mp4 (SYNTHETIC + demo.gt.json)
+make demo              # python -m loaflens.app --config configs/baseline.yaml --source video:samples/demo.mp4 --headless --out outputs/demo_out.mp4 --gt samples/demo.gt.json
+make demo-live         # python -m loaflens.app --config configs/baseline.yaml --source video:samples/demo.mp4 (jendela; q/ESC)
+make camera CAMERA=0   # python -m loaflens.app --config configs/baseline.yaml --source camera:0
 ```
