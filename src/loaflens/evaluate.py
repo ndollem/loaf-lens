@@ -232,7 +232,7 @@ def domain_check(
 ) -> DomainCheck:
     """Skor tiap roti terdeteksi di foto konveyor; tulis gambar beranotasi ke ``out``.
 
-    Semua roti di foto ini OK (dari user) → setiap REJECT adalah false positive domain konveyor.
+    Tool tidak tahu label tiap roti: bila semua roti di foto OK, setiap REJECT = false positive.
     Tidak ada retraining/tuning dari foto ini.
     """
     img = load_image(path, root)
@@ -287,10 +287,11 @@ def domain_table(dc: DomainCheck, image_note: str) -> list[str]:
     n = len(dc.scores)
     out = [
         f"Foto: `{dc.path}` — roti terdeteksi: **{n}** (roti terpotong di tepi frame dibuang). "
-        "Semua roti di foto ini OK menurut user, jadi **setiap REJECT = false positive** di "
-        "domain konveyor. Tidak ada retraining/tuning dari foto ini. " + image_note,
+        "Label per roti tidak diketahui tool; bila semua roti di foto OK, **setiap REJECT = "
+        "false positive** di domain konveyor. Tidak ada retraining/tuning dari foto ini. "
+        + image_note,
         "",
-        "| threshold | nilai | REJECT (false positive) |",
+        "| threshold | nilai | REJECT |",
         "|---|---|---|",
     ]
     for k in names:
