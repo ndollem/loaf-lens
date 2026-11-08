@@ -1,5 +1,7 @@
 # CLAUDE.md — LoafLens
 
+Nama proyek: **LoafLens** · repo: `loaf-lens` · package Python: `loaflens`.
+
 POC visi komputer low-cost untuk mendeteksi roti **kempes** (afkir) di konveyor.
 Detail tujuan & requirement: `docs/PRD.md`. Baca itu dulu.
 
@@ -20,7 +22,7 @@ Detail tujuan & requirement: `docs/PRD.md`. Baca itu dulu.
 
 ## Struktur repo
 ```
-loaflens/
+loaf-lens/
 ├── CLAUDE.md
 ├── README.md
 ├── docs/            # PRD.md, KICKOFF_PROMPT.md, catatan eksperimen

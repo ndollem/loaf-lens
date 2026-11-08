@@ -1,4 +1,4 @@
-# Kickoff Prompt untuk Claude Code (LoafLens)
+# Kickoff Prompt untuk Claude Code (LoafLens / repo `loaf-lens`)
 
 > Cara pakai: taruh `CLAUDE.md` di root repo dan `docs/PRD.md` di folder docs, buka Claude Code
 > di root repo (idealnya mulai dengan Plan Mode / Shift+Tab 2x), lalu tempel prompt di bawah.
@@ -8,7 +8,7 @@
 ## PROMPT (tempel apa adanya)
 
 ```
-Kamu akan membantu saya membangun POC bernama LoafLens: sistem visi komputer low-cost
+Kamu akan membantu saya membangun POC bernama LoafLens (repo: loaf-lens, package Python: loaflens): sistem visi komputer low-cost
 untuk mendeteksi roti KEMPES (afkir) di konveyor lewat kamera, memakai ML yang dilatih dari
 gambar kita sendiri (BUKAN LLM / API AI eksternal, harus jalan lokal di CPU).
 
