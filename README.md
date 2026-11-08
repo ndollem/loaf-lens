@@ -20,8 +20,10 @@ make lock    # perbarui requirements*.txt setelah mengubah pyproject.toml
 
 ## Data
 
-Data client **tidak** masuk git. Lihat [`data/README.md`](data/README.md) untuk struktur folder,
-konvensi nama file, manifest, dan aturan split per batch.
+Foto dari user ada di `train-data/` (di-commit atas keputusan user): `good-loaf/` = normal,
+`bad-loaf/` = kempes, split beku di `train-data/manifest.csv`. Data client lain **tidak** masuk git.
+Lihat [`data/README.md`](data/README.md) untuk cara menambah foto, `batch_id`, manifest, dan aturan
+split; hasil audit di [`docs/audit_m1.md`](docs/audit_m1.md).
 
 ## Config
 
@@ -34,6 +36,8 @@ Semua parameter ada di `configs/*.yaml`:
 
 | Perintah | Status |
 |---|---|
+| `make manifest` = `python -m loaflens.data --config configs/baseline.yaml` | tersedia (M1); tidak menimpa manifest, `--force` = split ulang |
+| `make audit` = `python -m loaflens.audit --config configs/baseline.yaml` | tersedia (M1); → `outputs/audit.md` + `docs/audit_m1.md` |
 | `python -m loaflens.train --config configs/baseline.yaml` | belum tersedia (M2) |
 | `python -m loaflens.evaluate --config configs/baseline.yaml` | belum tersedia (M2) |
 | `python -m loaflens.train --config configs/anomaly.yaml` | belum tersedia (M3) |
@@ -42,4 +46,4 @@ Semua parameter ada di `configs/*.yaml`:
 
 ## Status
 
-Lihat `docs/PRD.md` §13. Saat ini: **M0** (skeleton repo, config, test, lint).
+Lihat `docs/PRD.md` §13. Saat ini: **M1** selesai (manifest, split, audit dataset).

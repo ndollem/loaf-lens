@@ -2,11 +2,22 @@
 seed: 42
 
 data:
-  normal_dir: data/normal
-  defect_dir: data/defect
-  manifest: data/manifest.csv
+  normal_dir: train-data/good-loaf   # label normal (foto dari user, di-commit)
+  defect_dir: train-data/bad-loaf    # label defect (kempes)
+  manifest: train-data/manifest.csv  # split dibekukan; buat ulang hanya dengan --force
+  extensions: [.png, .jpg, .jpeg]
   split_by: batch_id          # split per batch/sesi, BUKAN acak per gambar
   split: {train: 0.70, val: 0.15, test: 0.15}
+  near_dup_hamming: 5         # dHash 64-bit; jarak <= ini = near-duplicate → dipaksa satu split
+
+audit:                        # python -m loaflens.audit
+  report: outputs/audit.md
+  docs_copy: docs/audit_m1.md # salinan ber-versi (tanpa gambar); null = tidak disalin
+  border_frac: 0.05           # lebar tepi (fraksi sisi) untuk statistik warna latar
+  center_frac: 0.5            # kotak tengah (fraksi sisi) untuk statistik warna roti
+  shortcut_acc: 0.9           # WARNING jika 1 fitur trivial memisahkan kelas dgn akurasi >= ini
+  pair_warn_ratio: 0.6        # WARNING jika nama bernomor sama (mis. a (3)/b (3)) jauh lebih mirip
+  min_eval_per_class: 30      # WARNING jika val/test per label < ini (metrik terlalu noisy)
 
 camera:
   view: top                   # top | oblique (miring ~45°)

@@ -1,67 +1,90 @@
 # Data LoafLens
 
-> Semua isi `data/` **di-gitignore** kecuali file ini dan `manifest.example.csv`.
-> Jangan pernah commit foto/video asli client.
+Folder data aktif diatur di `configs/*.yaml` (`data.normal_dir`, `data.defect_dir`,
+`data.manifest`). Saat ini:
 
-## Struktur
+| Config | Path | Label |
+|---|---|---|
+| `data.normal_dir` | `train-data/good-loaf/` | `normal` |
+| `data.defect_dir` | `train-data/bad-loaf/` | `defect` (kempes) |
+| `data.manifest` | `train-data/manifest.csv` | — |
+
+Format yang diterima: `data.extensions` (default `.png`, `.jpg`, `.jpeg`). Nama file boleh berisi
+spasi/kurung (mis. `bagus (3).png`).
+
+> **`train-data/` di-commit ke git atas keputusan user** (foto kecil, ~6.6 MB).
+> Isi `data/` lainnya tetap **di-gitignore** (kecuali file ini dan `manifest.example.csv`):
+> jangan commit foto/video client lain, model, atau output eksperimen.
+
+## Isi saat ini (M1, 2026-11-08)
+
+- `train-data/good-loaf/`: 24 PNG normal (`bagus (0..11)`, `medium (0..11)`), semua 312x417.
+- `train-data/bad-loaf/`: 24 PNG kempes (`bad (0..11)`, `medium`, `medium (1..11)`), semua 360x355.
+- Satu roti per foto, foto samping/miring gaya studio dengan latar polos — bukan foto konveyor.
+- **Tidak ada info batch/sesi** → tiap gambar jadi grupnya sendiri (lihat di bawah).
+- Hasil audit lengkap: [`docs/audit_m1.md`](../docs/audit_m1.md) (ukuran gambar beda per kelas =
+  risiko shortcut; arti prefix `medium` di kedua label belum jelas).
+
+## Menambah foto
+
+Taruh foto baru di folder label, **sebaiknya satu subfolder per batch/sesi pengambilan**:
 
 ```
-data/
-├── raw/          # foto/video asli dari client, apa adanya (jangan diubah)
-├── normal/       # roti OK (dikonfirmasi manusia)
-├── defect/       # roti kempes
-├── manifest.csv  # metadata tiap gambar (lihat di bawah)
-└── README.md
+train-data/good-loaf/<batch_id>/<nama>.png
+train-data/bad-loaf/<batch_id>/<nama>.png
 ```
 
-- `normal/` dipakai untuk melatih **kedua** scorer.
-- `defect/` dipakai untuk melatih **scorer A (baseline, supervised)**, dan untuk validasi/test
-  kedua scorer. Scorer B (anomaly) **tidak** melihat kempes saat `fit`.
-- Kedua folder di-split train/val/test **per batch** dengan cara yang sama.
+`batch_id` disarankan `<YYYYMMDD>_<sesi>`, misal `20261110_s1`. Satu sesi = satu kali pengambilan
+dengan kamera, posisi, dan pencahayaan yang sama. Normal dan kempes dari sesi yang sama memakai
+nama subfolder yang sama.
 
-## Konvensi nama file
+### Cara `batch_id` ditentukan (`python -m loaflens.data`)
 
-Satu subfolder per batch/sesi pengambilan:
+1. Ada subfolder langsung di bawah folder label → `batch_id` = nama subfolder itu (subfolder yang
+   lebih dalam ikut batch yang sama).
+2. File langsung di folder label → **satu grup per gambar**: `batch_id = img_<label>_<nama file>`.
+   Audit memberi WARNING karena split per batch tidak mungkin.
+3. Prefix nama file (`bagus`, `medium`, `bad`) **tidak** dipakai sebagai batch.
 
-```
-data/normal/<batch_id>/<batch_id>_<nnn>.jpg
-data/defect/<batch_id>/<batch_id>_<nnn>.jpg
-```
+Saat split, gambar sebatch dan pasangan **near-duplicate** (dHash 64-bit, jarak ≤
+`data.near_dup_hamming`) digabung jadi satu grup, sehingga selalu masuk split yang sama.
 
-`batch_id` = `<YYYYMMDD>_<sesi>`, misal `20261110_s1`. Satu sesi = satu kali pengambilan dengan
-kamera, posisi, dan pencahayaan yang sama. Contoh: `data/normal/20261110_s1/20261110_s1_001.jpg`.
+## Manifest (`train-data/manifest.csv`)
 
-## Manifest (`data/manifest.csv`)
-
+Dibuat oleh `make manifest` (`python -m loaflens.data --config configs/baseline.yaml`).
 Satu baris per gambar. Kolom:
 
 | Kolom | Isi |
 |---|---|
 | `path` | path relatif dari root repo |
 | `label` | `normal` \| `defect` |
-| `batch_id` | id batch/sesi (sama dengan nama subfolder) |
-| `date` | tanggal pengambilan, `YYYY-MM-DD` |
+| `batch_id` | id batch/sesi (nama subfolder, atau `img_...` bila tidak ada) |
+| `date` | tanggal pengambilan, `YYYY-MM-DD` (kosong = belum diketahui) |
 | `camera` | nama/model kamera atau HP |
 | `camera_view` | `top` (tegak lurus dari atas) \| `oblique` (miring ~45°) |
 | `lighting` | catatan pencahayaan, misal `lampu_pabrik`, `siang_jendela` |
 | `bread_type` | jenis roti / SKU |
-| `split` | `train` \| `val` \| `test` (diisi saat split, M1) |
+| `split` | `train` \| `val` \| `test` |
 
+Metadata yang belum diketahui dibiarkan kosong; isi manual di CSV bila sudah ada info.
 Contoh format: [`manifest.example.csv`](manifest.example.csv) (contoh, bukan data asli).
+
+**Manifest = split beku.** CLI tidak menimpa manifest yang sudah ada. `--force` membuat split
+ulang (metadata manual dipertahankan per `path`) — lakukan hanya sebelum tuning/evaluasi apa pun,
+dan catat alasannya di `docs/PRD.md`. Setelah menambah foto, audit akan melaporkan file yang belum
+masuk manifest.
 
 ## Aturan
 
-1. **Split per batch, bukan acak per gambar.** Semua gambar dari satu `batch_id` masuk ke split
-   yang sama, supaya frame yang mirip tidak bocor dari train ke test. Rasio split di
-   `configs/*.yaml` (`data.split`).
+1. **Split per batch/grup, bukan acak per gambar.** Semua gambar dari satu grup masuk ke split yang
+   sama, terstratifikasi per label, deterministik (`seed`). Rasio di `data.split`.
 2. **Test set dibekukan** sebelum tuning apa pun. Threshold dikalibrasi di val, bukan test.
-3. **Kebersihan `normal/`:** hanya roti yang benar-benar normal (konfirmasi manusia). Satu roti
-   kempes yang nyelip ke `normal/` merusak model anomaly. Kalau ragu, jangan masukkan ke `normal/`.
-4. Foto asli tetap di `raw/`; `normal/` dan `defect/` berisi salinan yang sudah dipilah.
+3. **Kebersihan folder normal:** hanya roti yang benar-benar normal (konfirmasi manusia). Satu roti
+   kempes yang nyelip merusak model anomaly. Kalau ragu, jangan masukkan.
+4. Jalankan `make audit` setiap kali data berubah; baca bagian WARNING.
 
-## Ukuran dataset (perkiraan awal, divalidasi di M1)
+## Ukuran dataset (perkiraan PRD §8)
 
-- ≥ 200 foto roti normal
-- ≥ 30–50 foto roti kempes (lebih banyak lebih baik, karena kempes juga dipakai melatih scorer A)
+- ≥ 200 foto roti normal, ≥ 30–50 foto roti kempes (saat ini 24 + 24 — jauh di bawah).
 - Variasi pencahayaan, posisi, dan **beberapa batch** (minimal 3 batch agar train/val/test bisa
-  dipisah per batch)
+  dipisah per batch).

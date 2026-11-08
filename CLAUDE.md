@@ -32,8 +32,14 @@ loaf-lens/
 │   ├── normal/      # roti OK untuk training (gitignored)
 │   ├── defect/      # roti kempes: train (scorer A) + val/test, split per batch (gitignored)
 │   └── README.md    # cara mengisi, konvensi penamaan, ukuran dataset
+├── train-data/      # foto dari user, DI-COMMIT atas keputusan user (~6.6 MB)
+│   ├── good-loaf/   # label normal
+│   ├── bad-loaf/    # label defect (kempes)
+│   └── manifest.csv # split beku (python -m loaflens.data)
 ├── src/loaflens/
 │   ├── config.py    # load + validasi configs/*.yaml
+│   ├── data.py      # scan → manifest + split per grup, loader gambar
+│   ├── audit.py     # laporan audit dataset (outputs/audit.md, docs/audit_m1.md)
 │   ├── capture.py   # sumber: camera / video file
 │   ├── segment.py   # ekstrak roti per frame (ROI, thresholding/background subtraction)
 │   ├── track.py     # satu roti = satu keputusan (garis keputusan / centroid tracking)
@@ -48,10 +54,11 @@ loaf-lens/
 
 ## Aturan data
 - **Jangan commit** gambar/video asli, model besar, atau output eksperimen. Pastikan `.gitignore` mencakup `data/*`, `outputs/`, `*.onnx`, `*.pt`, kecuali `data/README.md`.
+- **Pengecualian:** `train-data/` berisi foto dari user yang sengaja di-commit atas keputusan user (kecil, ~6.6 MB). Data/video asli lain dan model tetap tidak di-commit. Folder aktif diatur di `data.normal_dir`/`data.defect_dir` config.
 - Pisahkan split **per batch/sesi pengambilan**, bukan acak per gambar, untuk menghindari kebocoran (frame mirip di train & test).
 - Training memakai **kedua** folder: `normal/` dan `defect/` di-split train/val/test per batch. Scorer A (baseline) dilatih supervised dari normal + kempes; scorer B (anomaly) `fit` dari normal saja, kempes hanya untuk val/test.
-- `data/normal/` hanya berisi roti yang benar-benar normal (konfirmasi manusia). Satu roti kempes yang nyelip ke normal merusak model anomaly.
-- Catat metadata (tanggal, kamera, pencahayaan, jenis roti) di `data/manifest.csv`.
+- Folder normal (`train-data/good-loaf/`, atau `data/normal/` bila dipakai) hanya berisi roti yang benar-benar normal (konfirmasi manusia). Satu roti kempes yang nyelip ke normal merusak model anomaly.
+- Catat metadata (tanggal, kamera, pencahayaan, jenis roti) di manifest (`data.manifest` di config, saat ini `train-data/manifest.csv`).
 
 ## Konvensi kode
 - Type hints, docstring singkat, fungsi kecil; I/O (kamera/file) dipisah dari logika skor agar bisa di-test.
@@ -69,6 +76,8 @@ loaf-lens/
 ## Perintah (diisi saat dibuat)
 ```
 make setup | make test | make lint | make format | make lock
+make manifest   # python -m loaflens.data --config configs/baseline.yaml (tidak menimpa; --force = split ulang)
+make audit      # python -m loaflens.audit --config configs/baseline.yaml
 # belum tersedia (M2–M4):
 python -m loaflens.train --config configs/baseline.yaml
 python -m loaflens.train --config configs/anomaly.yaml

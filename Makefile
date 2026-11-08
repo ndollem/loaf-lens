@@ -3,7 +3,7 @@ UV  ?= uv
 PY  := $(shell cat .python-version)
 BIN := .venv/bin
 
-.PHONY: setup lock test lint format clean
+.PHONY: setup lock test lint format manifest audit clean
 
 setup:  ## buat .venv + pasang dependency terkunci + paket editable
 	$(UV) venv --python $(PY) .venv
@@ -24,6 +24,12 @@ lint:
 format:
 	$(BIN)/ruff check --fix .
 	$(BIN)/ruff format .
+
+manifest:  ## bangun train-data/manifest.csv (tidak menimpa; split ulang: tambah --force manual)
+	$(BIN)/python -m loaflens.data --config configs/baseline.yaml
+
+audit:  ## laporan audit dataset → outputs/audit.md + docs/audit_m1.md
+	$(BIN)/python -m loaflens.audit --config configs/baseline.yaml
 
 clean:
 	rm -rf .venv .pytest_cache .ruff_cache

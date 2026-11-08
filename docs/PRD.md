@@ -65,7 +65,7 @@ Pipeline runtime: `capture → segment (ROI + isolasi roti) → track (satu roti
 
 ## 8. Data
 - Sumber: foto roti asli dari client + (opsional) foto yang kita ambil sendiri.
-- Folder: `data/normal/`, `data/defect/`, `data/raw/` (lihat CLAUDE.md).
+- Folder: `data/normal/`, `data/defect/`, `data/raw/` (lihat CLAUDE.md). Saat ini (M1): `train-data/good-loaf/` (normal) dan `train-data/bad-loaf/` (kempes), diatur di config `data.*`.
 - Kebutuhan awal (perkiraan, divalidasi di M1): ≥ 200 foto normal; ≥ 30–50 foto kempes (train baseline A + validasi/test); variasi pencahayaan, posisi, dan batch.
 - Kedua folder (normal & kempes) di-split train/val/test per batch dengan aturan yang sama.
 - Split per sesi/batch. Test set dibekukan sebelum tuning apa pun.
@@ -117,6 +117,8 @@ Jika target tidak tercapai, laporan harus menjelaskan penyebab (data, sudut kame
 | M5 (opsional) | Uji Raspberry Pi / export ONNX, hook sinyal | Benchmark latency |
 
 ## 13. Status
-- [x] M0  - [ ] M1  - [ ] M2  - [ ] M3  - [ ] M4  - [ ] M5
+- [x] M0  - [x] M1  - [ ] M2  - [ ] M3  - [ ] M4  - [ ] M5
 
 - 2026-11-08 · M0 selesai: skeleton repo, `configs/{baseline,anomaly}.yaml` + validasi (`src/loaflens/config.py`), Makefile (`setup`/`test`/`lint`), `data/README.md`. Python **3.14** (numpy, opencv-python-headless, scikit-learn, torch, anomalib punya dukungan 3.14). Keputusan: training memakai normal **dan** kempes (scorer A supervised); scorer B tetap normal-only. Kamera `top`/`oblique` dan arah konveyor jadi field config.
+- 2026-11-08 · M1 selesai: `src/loaflens/data.py` (scan → `train-data/manifest.csv`, split beku per grup, `load_split`, `load_image`) dan `src/loaflens/audit.py` (laporan `outputs/audit.md`, salinan [`docs/audit_m1.md`](audit_m1.md)); `make manifest`, `make audit`. Data dari user di `train-data/` (di-commit atas keputusan user): **24 normal + 24 kempes**, satu roti per foto, gaya studio (bukan konveyor). Split 70/15/15 → train 17+17, val 3+3, test 4+4 (normal+defect).
+  Temuan audit: (1) **tidak ada info batch** → satu grup per gambar (+ near-duplicate digabung), split per batch belum mungkin; (2) **risiko shortcut**: ukuran gambar memisahkan kelas 100% (normal 312x417, kempes 360x355) — M2 wajib crop segmentasi + resize tetap, tanpa fitur ukuran gambar; statistik warna tepi/tengah hanya memisahkan ~60–70%; (3) prefix `medium` ada di **kedua** label dan pasangan `bagus (n)`/`medium (n)` di normal sangat mirip (kemungkinan varian roti yang sama; 6/12 pasangan beda split) — arti `medium` perlu dikonfirmasi user; (4) val/test sangat kecil (3–4 per label) → metrik sangat noisy, M2 sebaiknya pakai cross-validation per grup. Tidak ada generator data sintetis di M1 (data asli sudah ada; generator video sintetis ditunda ke M4).
