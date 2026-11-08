@@ -1,0 +1,83 @@
+# Scorer A — baseline klasik (fitur bentuk/warna → scikit-learn), supervised normal + kempes.
+seed: 42
+
+data:
+  normal_dir: train-data/good-loaf   # label normal (foto dari user, di-commit)
+  defect_dir: train-data/bad-loaf    # label defect (kempes)
+  manifest: train-data/manifest.csv  # split dibekukan; buat ulang hanya dengan --force
+  extensions: [.png, .jpg, .jpeg]
+  split_by: batch_id          # split per batch/sesi, BUKAN acak per gambar
+  split: {train: 0.70, val: 0.15, test: 0.15}
+  near_dup_hamming: 5         # dHash 64-bit; jarak <= ini = near-duplicate → dipaksa satu split
+
+audit:                        # python -m loaflens.audit
+  report: outputs/audit.md
+  docs_copy: docs/audit_m1.md # salinan ber-versi (tanpa gambar); null = tidak disalin
+  border_frac: 0.05           # lebar tepi (fraksi sisi) untuk statistik warna latar
+  center_frac: 0.5            # kotak tengah (fraksi sisi) untuk statistik warna roti
+  shortcut_acc: 0.9           # WARNING jika 1 fitur trivial memisahkan kelas dgn akurasi >= ini
+  pair_warn_ratio: 0.6        # WARNING jika nama bernomor sama (mis. a (3)/b (3)) jauh lebih mirip
+  min_eval_per_class: 30      # WARNING jika val/test per label < ini (metrik terlalu noisy)
+
+camera:
+  view: top                   # top | oblique (miring ~45°)
+  roi: null                   # [x, y, w, h] fraksi frame 0–1; null = seluruh frame
+
+segment:                      # isolasi roti dari latar polos (kanal saturasi HSV)
+  blur: 5                     # kernel Gaussian (ganjil) sebelum threshold
+  sat_threshold: null         # null = Otsu per gambar; angka 0–255 = threshold tetap
+  morph_kernel: 7             # kernel elips open/close (ganjil)
+  min_area_frac: 0.02         # kontur terbesar < fraksi frame ini = segmentasi gagal
+  crop_margin: 0.05           # margin crop di sekitar bbox (fraksi sisi bbox)
+  # banyak roti per frame (segment_all: domain check konveyor, M4)
+  obj_min_area_frac: 0.003    # luas objek min/maks, fraksi luas ROI/frame
+  obj_max_area_frac: 0.15
+  drop_border: true           # buang roti yang menyentuh tepi ROI/frame (terpotong)
+  obj_min_value: 40           # V < ini dinolkan (bayangan kontak gelap di konveyor)
+
+track:                        # satu roti = satu keputusan (M4, src/loaflens/track.py)
+  direction: top_to_bottom    # left_to_right | right_to_left | top_to_bottom | bottom_to_top
+  line_pos: 0.5               # garis keputusan, fraksi frame searah gerak (dari tepi masuk)
+  max_distance: 0.08          # jarak maks centroid prediksi→deteksi, fraksi sisi terpanjang frame
+  max_missed: 5               # track dihapus setelah sekian frame berturut-turut tanpa deteksi
+
+model:
+  type: baseline
+  train_labels: [normal, defect]
+  params:
+    crop_size: 192            # crop bbox roti → sisi terpanjang = ini px (aspek dijaga, pad)
+    classifier: logistic_regression   # logistic_regression | random_forest | svm
+    classifier_params:        # hyperparameter per classifier (hanya yang dipilih dipakai)
+      logistic_regression: {C: 1.0, max_iter: 2000}
+      random_forest: {n_estimators: 200, min_samples_leaf: 2}
+      svm: {C: 1.0, kernel: rbf}
+    features:
+      erode_px: 9             # erosi mask sebelum statistik tekstur (buang tepi latar)
+      texture_blur_sigma: 1.5   # Gaussian sebelum tekstur (0 = mati); redam noise/resampling
+      canny: [50, 150]        # threshold Canny untuk kepadatan tepi (kerutan)
+      crease_px: 6            # radius kernel black-hat (px pada crop) untuk alur lipatan
+      specular_v: 230         # piksel kilap: V >= ini ...
+      specular_s: 60          # ... dan S <= ini (HSV 0–255)
+
+threshold: 50                 # skor 0–100; REJECT jika skor >= threshold (kalibrasi di val, bukan test)
+
+eval:                         # python -m loaflens.evaluate / calibrate
+  fpr_target: 0.05            # target FPR untuk recall & kalibrasi threshold (dari CV train+val)
+  cv_folds: 5                 # StratifiedGroupKFold pada train+val (test TIDAK ikut)
+  top_errors: 5               # jumlah kesalahan terbesar per split
+  docs_copy: docs/results_m3_baseline.md   # docs/results_m2.md = snapshot M2 (dibekukan)
+  domain_check: [train-data/domain-check/conveyor_good_01.webp]   # semua roti OK; tidak dilatih
+
+app:                          # python -m loaflens.app (M4: demo real-time)
+  window_name: LoafLens
+  out_fps: null               # fps video --out; null = fps sumber (kamera tanpa fps → 30)
+  snapshot_dir: outputs/rejects            # F8: crop + frame beranotasi tiap REJECT
+  rejects_csv: outputs/rejects/rejects.csv # F8: ditambah (append) tiap REJECT
+  decisions_csv: outputs/app/decisions.csv # semua keputusan satu run (ditimpa per run)
+  snapshot_margin: 0.15       # margin crop snapshot, fraksi sisi bbox
+  synthetic_banner: "SYNTHETIC - bukan untuk evaluasi akurasi"   # ASCII (putText OpenCV)
+  gt_match_dist: 0.05         # --gt: jarak maks keputusan→roti ground truth, fraksi sisi terpanjang
+  gt_report: outputs/app/gt_compare.md     # --gt: laporan perbandingan
+
+output:
+  dir: outputs/baseline

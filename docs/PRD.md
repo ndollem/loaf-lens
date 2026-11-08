@@ -23,6 +23,12 @@ Client memiliki lini produksi roti di konveyor. Roti yang kempes harus di-reject
 ## 3. Definisi "kempes" (HARUS dikonfirmasi client)
 Placeholder: roti yang tingginya turun / bagian tengah cekung / bentuk kolaps dibanding roti standar, sehingga di bawah spesifikasi tampilan. Perlu: foto contoh batas (borderline), jumlah jenis roti (SKU), dan siapa yang memberi label ground truth.
 
+**Definisi dari user (2026-11-08), dipakai untuk label `train-data/`:**
+- **Diterima (normal):** `bagus` = jelas layak; `medium` (good-loaf) = masih layak walau permukaan tidak sempurna (cacat permukaan ringan).
+- **Reject (kempes):** `bad` = kempes parah; `medium` (bad-loaf) = tampak lumayan tetapi permukaan terlalu kempes.
+- **Fokus pembeda: kondisi/tekstur permukaan roti** — kerutan, lipatan, permukaan cekung/datar, kilap — bukan sesi/tanggal foto. Nomor sama dengan prefix berbeda = tingkat kualitas berbeda, bukan roti yang sama (split beku dipertahankan).
+- Masih terbuka: definisi client (SKU, siapa pemberi label resmi, contoh borderline dari lini produksi).
+
 ## 4. Pengguna & skenario
 - **Operator QC (target akhir):** melihat roti lewat, melihat tanda OK/REJECT.
 - **Tim POC (kita):** melatih ulang model dari foto baru, menyetel threshold, menjalankan demo.
@@ -34,7 +40,7 @@ Dua scorer dengan antarmuka yang sama, dibandingkan pada hold-out set yang sama:
 | | A. Baseline klasik | B. Anomaly detection |
 |---|---|---|
 | Input latih | roti normal + kempes (berlabel) | roti normal saja |
-| Metode | fitur bentuk/warna (area, solidity, rasio dimensi, rata-rata L*, tekstur) → SVM/RF/IsolationForest | PatchCore / EfficientAd via anomalib (feature extractor pretrained) |
+| Metode | fitur bentuk/warna (area, solidity, rasio dimensi, rata-rata L*, tekstur) → SVM/RF/IsolationForest | PatchCore-lite (ResNet18 pretrained beku sebagai feature extractor, torch CPU; anomalib tidak dipakai — keputusan M3) |
 | Keunggulan | sangat ringan, mudah dijelaskan | tidak butuh banyak contoh kempes, ada heatmap |
 | Risiko | kempes halus dari kamera atas sulit terlihat | lebih berat, sensitif pada kebersihan data normal |
 
@@ -43,7 +49,7 @@ Pipeline runtime: `capture → segment (ROI + isolasi roti) → track (satu roti
 ## 6. Requirement fungsional
 | ID | Requirement | Prioritas |
 |---|---|---|
-| F1 | Training dari folder `data/normal/` (dan `data/defect/` untuk baseline) via CLI + config YAML | Must |
+| F1 | Training dari folder `data/normal/` dan `data/defect/` (kempes ikut dilatih untuk baseline A; anomaly B hanya normal) via CLI + config YAML | Must |
 | F2 | Evaluasi pada hold-out set: AUROC, recall pada FPR tetap, confusion matrix, kurva ROC, daftar kesalahan terbesar | Must |
 | F3 | Skor kontinu 0–100 per roti, threshold dari config | Must |
 | F4 | Sumber input: `camera:<id>` dan `video:<file>` | Must |
@@ -65,8 +71,9 @@ Pipeline runtime: `capture → segment (ROI + isolasi roti) → track (satu roti
 
 ## 8. Data
 - Sumber: foto roti asli dari client + (opsional) foto yang kita ambil sendiri.
-- Folder: `data/normal/`, `data/defect/`, `data/raw/` (lihat CLAUDE.md).
-- Kebutuhan awal (perkiraan, divalidasi di M1): ≥ 200 foto normal; ≥ 30–50 foto kempes untuk validasi/test; variasi pencahayaan, posisi, dan batch.
+- Folder: `data/normal/`, `data/defect/`, `data/raw/` (lihat CLAUDE.md). Saat ini (M1): `train-data/good-loaf/` (normal) dan `train-data/bad-loaf/` (kempes), diatur di config `data.*`.
+- Kebutuhan awal (perkiraan, divalidasi di M1): ≥ 200 foto normal; ≥ 30–50 foto kempes (train baseline A + validasi/test); variasi pencahayaan, posisi, dan batch.
+- Kedua folder (normal & kempes) di-split train/val/test per batch dengan aturan yang sama.
 - Split per sesi/batch. Test set dibekukan sebelum tuning apa pun.
 - **Perbedaan domain:** latih dari foto roti asli, uji dari video di layar → catat sebagai risiko; sediakan juga uji dengan file video langsung (tanpa rekam layar) untuk memisahkan efek model vs efek kamera/layar.
 
@@ -111,9 +118,22 @@ Jika target tidak tercapai, laporan harus menjelaskan penyebab (data, sudut kame
 | M0 | Skeleton repo, config, CLAUDE.md, `.gitignore`, CI lokal (pytest, ruff), data README | `make test` hijau |
 | M1 | Audit dataset + loader + split per batch + data sintetis untuk uji pipeline | Laporan audit; test loader |
 | M2 | Scorer A (baseline) + evaluate.py + laporan metrik | Tabel metrik di `outputs/` |
-| M3 | Scorer B (anomalib) + perbandingan A vs B + kalibrasi threshold | Laporan perbandingan |
+| M3 | Scorer B (anomaly; PatchCore-lite, torch CPU) + perbandingan A vs B + kalibrasi threshold | Laporan perbandingan |
 | M4 | Pipeline real-time (segment+track+overlay), mode video & kamera, snapshot reject | Demo dengan video file lalu kamera-ke-layar |
 | M5 (opsional) | Uji Raspberry Pi / export ONNX, hook sinyal | Benchmark latency |
 
 ## 13. Status
-- [ ] M0  - [ ] M1  - [ ] M2  - [ ] M3  - [ ] M4  - [ ] M5
+- [x] M0  - [x] M1  - [x] M2  - [x] M3  - [x] M4 (uji file video; kamera-ke-layar menunggu user)  - [ ] M5
+
+- 2026-11-08 · M0 selesai: skeleton repo, `configs/{baseline,anomaly}.yaml` + validasi (`src/loaflens/config.py`), Makefile (`setup`/`test`/`lint`), `data/README.md`. Python **3.14** (numpy, opencv-python-headless, scikit-learn, torch, anomalib punya dukungan 3.14). Keputusan: training memakai normal **dan** kempes (scorer A supervised); scorer B tetap normal-only. Kamera `top`/`oblique` dan arah konveyor jadi field config.
+- 2026-11-08 · M1 selesai: `src/loaflens/data.py` (scan → `train-data/manifest.csv`, split beku per grup, `load_split`, `load_image`) dan `src/loaflens/audit.py` (laporan `outputs/audit.md`, salinan [`docs/audit_m1.md`](audit_m1.md)); `make manifest`, `make audit`. Data dari user di `train-data/` (di-commit atas keputusan user): **24 normal + 24 kempes**, satu roti per foto, gaya studio (bukan konveyor). Split 70/15/15 → train 17+17, val 3+3, test 4+4 (normal+defect).
+  Temuan audit: (1) **tidak ada info batch** → satu grup per gambar (+ near-duplicate digabung), split per batch belum mungkin; (2) **risiko shortcut**: ukuran gambar memisahkan kelas 100% (normal 312x417, kempes 360x355) — M2 wajib crop segmentasi + resize tetap, tanpa fitur ukuran gambar; statistik warna tepi/tengah hanya memisahkan ~60–70%; (3) prefix `medium` ada di **kedua** label dan pasangan `bagus (n)`/`medium (n)` di normal sangat mirip (kemungkinan varian roti yang sama; 6/12 pasangan beda split) — arti `medium` perlu dikonfirmasi user; (4) val/test sangat kecil (3–4 per label) → metrik sangat noisy, M2 sebaiknya pakai cross-validation per grup. Tidak ada generator data sintetis di M1 (data asli sudah ada; generator video sintetis ditunda ke M4).
+- 2026-11-08 · M2 selesai: scorer A (baseline) — `segment.py` (saturasi HSV + Otsu → kontur terbesar → crop bbox, resize sisi terpanjang 192 px + pad; 0/48 gagal, alas roti pucat kadang terpotong sebagian), `features.py` (25 fitur: tekstur LBP/Laplacian/gradien/Canny/lipatan black-hat setelah blur σ=1.5, warna L\*a\*b\* + fraksi kilap, bentuk bebas skala; tanpa ukuran gambar asli), `score.py` (`Scorer` Protocol, `BaselineScorer` = StandardScaler + logistic regression, skor = 100·P(kempes), joblib), `train.py`, `evaluate.py`; `make train`, `make evaluate`; laporan [`docs/results_m2.md`](results_m2.md).
+  Hasil (48 foto studio — indikasi kelayakan, bukan akurasi produksi): **test AUROC 1.000** (4+4, akurasi 8/8 pada threshold config 50, dievaluasi sekali, tanpa tuning), val AUROC 1.000 (3+3); **CV 5-fold per grup pada train+val: AUROC 0.988 ± 0.025**, akurasi 0.975 ± 0.050 (satu salah: `bagus (10)` skor 84 — roti kusam/pucat dengan sedikit retakan); kelompok borderline `medium-good` rata-rata skor 7, `medium-bad` 91 (CV out-of-fold). **Latency ~4.5 ms/roti** (CPU, segmentasi+fitur+prediksi). Tidak ada fitur tunggal dengan AUROC CV ≥ 0.98 (tertinggi `col_L_std` 0.91).
+  Catatan: (1) hold-out sangat kecil, angka CV lebih bisa dipercaya; (2) model bersandar terutama pada kontras luminans/kilap, warna, LBP, dan aspek roti — fitur kerutan eksplisit lemah sendirian; (3) versi awal tanpa blur memakai tekstur halus yang peka resolusi (arah terbalik dari dugaan) → diganti blur + crop 192 berdasarkan uji resize & CV saja, sebelum test dibuka; (4) foto per folder diambil dengan kondisi berbeda (ukuran, latar, pencahayaan) sehingga angka hampir sempurna bisa sebagian mencerminkan perbedaan pengambilan foto, bukan kempes — uji sebenarnya adalah rekaman kamera/konveyor (M4); (5) threshold belum dikalibrasi (M3).
+- 2026-11-08 · M3 selesai: scorer B "PatchCore-lite" (`src/loaflens/anomaly.py`: crop roti `segment.crop` 224 px, latar diisi abu → ResNet18 ImageNet **beku** layer2+layer3, avg-pool 3x3 → patch di dalam mask roti tererosi → memory bank 6513 patch dari 17 roti normal train → jarak 1-NN, skor gambar = patch maks; skor 0–100 = clip(50·mentah/ref), ref = p95 skor leave-one-out normal train; heatmap F10), kalibrasi threshold F9 (`calibrate.py`, dari CV out-of-fold train+val, bukan test), perbandingan A vs B (`compare.py` → [`docs/results_m3.md`](results_m3.md)), `segment_all` (banyak roti per frame, ROI, buang objek di tepi, abaikan bayangan gelap) + domain check foto konveyor asli `train-data/domain-check/conveyor_good_01.webp`. Dependency baru: `torch 2.15.0` + `torchvision 0.29.2` CPU (index CPU PyTorch via `uv --torch-backend cpu`; Linux +cpu tanpa CUDA, macOS arm64 wheel biasa; `.venv` +±0.9 GB). Evaluasi refactor: kedua scorer berbagi kode CV/laporan (`represent`/`fit_repr`/`score_repr`); laporan scorer A kini `docs/results_m3_baseline.md` (snapshot M2 tetap), angka A identik dengan M2.
+  Hasil (48 foto studio — indikasi kelayakan): **A** test AUROC 1.000, CV AUROC 0.988 ± 0.025, ≈ 4 ms/roti, model 3 kB; **B** test AUROC 1.000, CV AUROC 1.000 ± 0.000 (gabungan OOF 0.995), ≈ 20–28 ms/roti, model 10 MB (+ bobot ResNet18 47 MB di cache). Test 8/8 benar untuk keduanya pada threshold config 50 dan terkalibrasi. B memisahkan urutan dengan baik tetapi marginnya sempit (normal 36–51 vs kempes 50–64, CV). **Threshold terkalibrasi (FPR ≤ 0.05, CV):** A **48.9**, B **52.1** (val saja: 48.3 / 52.7) — config tidak diubah, keputusan user. **Domain check konveyor (15 roti terdeteksi, semua bagus):** A **0/15** REJECT (config & kalibrasi); B **11/15** @50 dan **5/15** @52.1 — heatmap menunjuk kilap atas roti (tampilan yang tidak ada di normal studio) → domain gap. Rekomendasi: A sebagai keputusan utama demo M4, heatmap B sebagai diagnostik; B perlu memory bank dari roti bagus kamera konveyor sebelum dipakai.
+  Catatan: (1) hold-out sangat kecil, AUROC 1.000 tidak membedakan scorer; (2) A bersandar pada kilap/warna — 0/15 di konveyor bisa "benar karena alasan kurang tepat", recall di konveyor belum terukur (belum ada foto kempes konveyor); (3) domain check hanya 1 foto roti bagus (hanya FPR); (4) langkah FPR kalibrasi kasar (CV 0.05, val 0.33); (5) aturan kalibrasi diganti dari "tepat di atas normal ke-(k+1)" ke "tengah celah ke kempes terendah" setelah melihat A = 26.4 (di bawah semua kempes tanpa tambahan recall CV) — perubahan dibuat setelah domain check versi pertama terlihat; versi pertama: A 26.4 → 1/15, B 51.0 → 7/15 (dilaporkan di `docs/results_m3.md`); (6) parameter segmentasi multi-objek (`obj_*`) disetel dengan mata pada foto konveyor (bukan metrik); parameter scorer B adalah default awal, tidak di-tuning.
+- 2026-11-08 · M4 selesai (uji file video): pipeline real-time `src/loaflens/app.py` (`capture.py` sumber `video:`/`camera:`, `segment_all` + ROI, `track.py` tracker centroid tetangga terdekat + garis keputusan = satu keputusan per roti saat centroid melintas, skor **scorer A**, overlay F7 kotak/id/skor/OK-REJECT/garis/FPS/counter/banner SYNTHETIC, F8 snapshot + `outputs/rejects/rejects.csv`, `outputs/app/decisions.csv`, log `DECISION ...` per roti sebagai hook F11 sederhana), section config `app:` + `track.max_distance/max_missed`, `track.direction` → `top_to_bottom` (sesuai video demo). Video demo **SYNTHETIC** `src/loaflens/synth.py` (`make demo-video`): 2 foto `train-data/domain-check/` di-scroll (941x900, 30 fps, 949 frame, 8 px/frame, 2 putaran) + ground truth posisi (`labels.json`). Dependency: `opencv-python-headless` → `opencv-python` (GUI; keputusan user); `make lock` gagal karena `download-r2.pytorch.org` diblokir di sandbox → pin diganti manual (versi sama 5.0.0.93). Laporan [`docs/results_m4.md`](results_m4.md).
+  Hasil (SYNTHETIC — bukan untuk evaluasi akurasi): **70/70 roti diputuskan tepat sekali, miscount 0%** (0 duplikat, 0 miss; juga 35/35 pada 4/16/24 px/frame); kempes **5/5** di-REJECT per putaran, roti OK ikut REJECT **0/30**, borderline #12/#19 OK (skor 6, 29–30); kempes terendah 59 vs OK tertinggi 36. **±80 FPS** loop penuh (64–87), segment+track ≈ 6 ms/frame, skor ≈ 6 ms/roti (CPU 4 vCPU).
+  Catatan: (1) scroll foto diam (tanpa blur/cahaya/kamera) → hanya menguji logika pipeline & penghitungan; (2) skor memakai 2 foto yang sama dengan domain check M3 → bukan bukti akurasi baru; putaran 2 = konten sama; (3) **demo kamera-ke-layar (≥ 5 menit, akurasi dilaporkan terpisah) belum dijalankan — menunggu user** (langkah di README); jalur kamera & jendela tidak bisa diuji penuh di container (jendela hanya di bawah Xvfb, 90 frame).

@@ -1,0 +1,74 @@
+# Scorer B — anomaly detection (M3): latih dari roti normal saja; kempes hanya untuk val/test.
+seed: 42
+
+data:
+  normal_dir: train-data/good-loaf   # label normal (foto dari user, di-commit)
+  defect_dir: train-data/bad-loaf    # label defect (kempes)
+  manifest: train-data/manifest.csv  # split dibekukan; buat ulang hanya dengan --force
+  extensions: [.png, .jpg, .jpeg]
+  split_by: batch_id          # split per batch/sesi, BUKAN acak per gambar
+  split: {train: 0.70, val: 0.15, test: 0.15}
+  near_dup_hamming: 5         # dHash 64-bit; jarak <= ini = near-duplicate → dipaksa satu split
+
+audit:                        # python -m loaflens.audit
+  report: outputs/audit.md
+  docs_copy: docs/audit_m1.md # salinan ber-versi (tanpa gambar); null = tidak disalin
+  border_frac: 0.05           # lebar tepi (fraksi sisi) untuk statistik warna latar
+  center_frac: 0.5            # kotak tengah (fraksi sisi) untuk statistik warna roti
+  shortcut_acc: 0.9           # WARNING jika 1 fitur trivial memisahkan kelas dgn akurasi >= ini
+  pair_warn_ratio: 0.6        # WARNING jika nama bernomor sama (mis. a (3)/b (3)) jauh lebih mirip
+  min_eval_per_class: 30      # WARNING jika val/test per label < ini (metrik terlalu noisy)
+
+camera:
+  view: top                   # top | oblique (miring ~45°)
+  roi: null                   # [x, y, w, h] fraksi frame 0–1; null = seluruh frame
+
+segment:                      # isolasi roti dari latar polos (kanal saturasi HSV)
+  blur: 5                     # kernel Gaussian (ganjil) sebelum threshold
+  sat_threshold: null         # null = Otsu per gambar; angka 0–255 = threshold tetap
+  morph_kernel: 7             # kernel elips open/close (ganjil)
+  min_area_frac: 0.02         # kontur terbesar < fraksi frame ini = segmentasi gagal
+  crop_margin: 0.05           # margin crop di sekitar bbox (fraksi sisi bbox)
+  # banyak roti per frame (segment_all: domain check konveyor, M4)
+  obj_min_area_frac: 0.003    # luas objek min/maks, fraksi luas ROI/frame
+  obj_max_area_frac: 0.15
+  drop_border: true           # buang roti yang menyentuh tepi ROI/frame (terpotong)
+  obj_min_value: 40           # V < ini dinolkan (bayangan kontak gelap di konveyor)
+
+track:                        # satu roti = satu keputusan (M4, src/loaflens/track.py)
+  direction: top_to_bottom    # left_to_right | right_to_left | top_to_bottom | bottom_to_top
+  line_pos: 0.5               # garis keputusan, fraksi frame searah gerak (dari tepi masuk)
+  max_distance: 0.08          # jarak maks centroid prediksi→deteksi, fraksi sisi terpanjang frame
+  max_missed: 5               # track dihapus setelah sekian frame berturut-turut tanpa deteksi
+
+model:
+  type: anomaly
+  train_labels: [normal]      # defect di split train tidak dipakai untuk fit
+  params:                     # PatchCore-lite (src/loaflens/anomaly.py)
+    weights: imagenet         # imagenet = ResNet18 pretrained beku (feature extractor); null = acak (test)
+    weights_dir: null         # null = cache torch (~/.cache/torch/hub/checkpoints); unduh sekali saat train
+    image_size: 224           # crop roti (segment.crop) → persegi ini px
+    fill_background: true     # piksel di luar mask roti diisi abu rata-rata ImageNet
+    mask_erode_px: 8          # erosi mask (px pada crop) sebelum memilih patch roti
+    pool: 3                   # avg-pool lokal 3x3 pada feature map
+    bank_ratio: 1.0           # subsample acak memory bank (fraksi patch); 17 gambar train → muat semua
+    bank_max: 20000           # batas jumlah patch di bank
+    knn: 1                    # jarak ke k tetangga terdekat (rata-rata)
+    image_score: max          # max | topk_mean (rata-rata topk_frac patch terjauh)
+    topk_frac: 0.01
+    ref_percentile: 95        # skor 50 = persentil ini dari skor LOO roti normal train
+    heatmap_sigma: 4          # blur Gaussian heatmap (px pada crop)
+    num_threads: 4            # torch.set_num_threads
+
+threshold: 50                 # skor 0–100; REJECT jika skor >= threshold (kalibrasi di val, bukan test)
+
+eval:                         # python -m loaflens.evaluate / calibrate
+  fpr_target: 0.05            # target FPR untuk recall & kalibrasi threshold (dari CV train+val)
+  cv_folds: 5                 # StratifiedGroupKFold pada train+val (test TIDAK ikut)
+  top_errors: 5
+  docs_copy: docs/results_m3_anomaly.md
+  domain_check: [train-data/domain-check/conveyor_good_01.webp]   # semua roti OK; tidak dilatih
+  heatmaps: true              # overlay heatmap val/test → outputs/anomaly/heatmaps/
+
+output:
+  dir: outputs/anomaly

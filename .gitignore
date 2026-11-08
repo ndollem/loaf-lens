@@ -1,0 +1,27 @@
+# Data client: jangan pernah di-commit
+data/*
+!data/README.md
+!data/manifest.example.csv
+
+# Output eksperimen, model, sampel video
+outputs/
+samples/*
+!samples/README.md
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.joblib
+
+# Python / tooling
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.DS_Store
